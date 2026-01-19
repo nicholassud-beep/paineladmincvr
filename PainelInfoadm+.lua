@@ -59,7 +59,12 @@ local max_players = 300
 -- =========================================================
 -- SISTEMA DE AUTO-ATUALIZACAO
 -- =========================================================
-local UPDATE_URL = "https://raw.githubusercontent.com/nicholassud-beep/paineladmincvr/main/PainelInfoadm+.lua" -- COLOQUE AQUI O LINK RAW DO SEU SCRIPT (Ex: https://raw.githubusercontent.com/.../PainelInfoadm+.lua)
+-- COMO ATUALIZAR NO GITHUB:
+-- 1. Acesse seu repositorio: https://github.com/nicholassud-beep/paineladmincvr
+-- 2. Clique em "Add file" -> "Upload files".
+-- 3. Arraste este arquivo atualizado para la e clique em "Commit changes".
+-- =========================================================
+local UPDATE_URL = "https://raw.githubusercontent.com/nicholassud-beep/paineladmincvr/main/PainelInfoadm+.lua"
 
 local function check_update()
     if not UPDATE_URL or #UPDATE_URL == 0 then
@@ -79,18 +84,26 @@ local function check_update()
                 local ver_remota = content:match('script_version%("(.-)"%)')
                 local ver_atual = thisScript().version
                 
-                if ver_remota and ver_remota ~= ver_atual then
-                    sampAddChatMessage("[PI] Nova versao encontrada: " .. ver_remota .. " (Atual: " .. ver_atual .. ")", 0x00FF00)
-                    sampAddChatMessage("[PI] Atualizando...", 0x00FF00)
-                    
-                    local f_w = io.open(thisScript().path, "w")
-                    if f_w then f_w:write(content); f_w:close(); sampAddChatMessage("[PI] Atualizado! Recarregando script...", 0x00FF00); thisScript():reload()
-                    else sampAddChatMessage("[PI] Erro ao gravar o arquivo do script.", 0xFF0000) end
+                if ver_remota then
+                    if ver_remota ~= ver_atual then
+                        sampAddChatMessage("[PI] Nova versao encontrada: " .. ver_remota .. " (Atual: " .. ver_atual .. ")", 0x00FF00)
+                        sampAddChatMessage("[PI] Atualizando...", 0x00FF00)
+                        
+                        local f_w = io.open(thisScript().path, "w")
+                        if f_w then f_w:write(content); f_w:close(); sampAddChatMessage("[PI] Atualizado! Recarregando script...", 0x00FF00); thisScript():reload()
+                        else sampAddChatMessage("[PI] Erro ao gravar o arquivo do script.", 0xFF0000) end
+                    else
+                        sampAddChatMessage("[PI] Voce ja esta na versao mais recente (" .. ver_atual .. ").", 0x00FF00)
+                    end
                 else
-                    sampAddChatMessage("[PI] Nenhuma atualizacao disponivel. Versao: " .. ver_atual, 0xFFFF00)
+                    sampAddChatMessage("[PI] Erro: Nao foi possivel identificar a versao remota.", 0xFF0000)
+                    sampAddChatMessage("[PI] Verifique se o arquivo existe no GitHub.", 0xFF0000)
                 end
                 os.remove(temp_path)
             end
+        elseif status == dlstatus.STATUS_DOWNLOADERROR then
+            sampAddChatMessage("[PI] Erro de conexao ao verificar atualizacoes.", 0xFF0000)
+            sampAddChatMessage("[PI] Verifique se o repositorio e Publico e o arquivo existe.", 0xFF0000)
         end
     end)
 end
