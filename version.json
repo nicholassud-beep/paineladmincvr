@@ -1,1 +1,18 @@
-
+[
+  {
+    "version": "8.9.33",
+    "date": "20/01/2026",
+    "changes": [
+      "Adicionado sistema de Changelog online.",
+      "Correções diversas no sistema de atualização."
+    ]
+  },
+  {
+    "version": "8.9.32",
+    "date": "19/01/2026",
+    "changes": [
+      "Correção no sistema de auto-update.",
+      "Melhoria na aba de configurações."
+    ]
+  }
+]
