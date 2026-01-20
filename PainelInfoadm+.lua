@@ -112,28 +112,51 @@ end
 
 -- SISTEMA DE ATUALIZACAO AUTOMATICA (GITHUB)
 -- Configure as URLs abaixo com o seu repositorio
-local update_url = "https://raw.githubusercontent.com/SEU_USUARIO/SEU_REPOSITORIO/main/version.json"
-local script_url = "https://raw.githubusercontent.com/SEU_USUARIO/SEU_REPOSITORIO/main/PainelInfoadm%2B.lua"
+local update_url = "https://raw.githubusercontent.com/nicholassud-beep/paineladmincvr/main/version.json"
+local script_url = "https://raw.githubusercontent.com/nicholassud-beep/paineladmincvr/main/PainelInfoadm%2B.lua"
 
-function check_update()
+function check_update(notify_no_update)
     local dlstatus = require('moonloader').download_status
-    local json_path = os.getenv('TEMP') .. '\\painelinfo_version.json'
+    local json_path = os.getenv('TEMP') .. '\\painelinfo_version_' .. os.time() .. '.json'
     
+    if notify_no_update then sampAddChatMessage("[PainelInfo] Verificando atualizacoes...", -1) end
+
     downloadUrlToFile(update_url, json_path, function(id, status, p1, p2)
         if status == dlstatus.STATUS_ENDDOWNLOADDATA then
             local f = io.open(json_path, 'r')
             if f then
                 local info = decodeJson(f:read('*a'))
                 f:close()
-                if info and info.latest_version_number and tonumber(info.latest_version_number) > thisScript().version_number then
+                os.remove(json_path) -- Limpa o arquivo temporario
+                local remote_ver = info and tonumber(info.latest_version_number)
+                local local_ver = thisScript().version_number or 0
+                if remote_ver and remote_ver > local_ver then
                     sampAddChatMessage("[PainelInfo] Nova versao encontrada: v" .. (info.latest_version_text or "?"), 0xFFFF00)
                     sampAddChatMessage("[PainelInfo] Atualizando automaticamente...", 0xFFFF00)
-                    downloadUrlToFile(script_url, thisScript().path, function(id2, status2, p12, p22)
+                    local temp_path = thisScript().path .. ".upd"
+                    downloadUrlToFile(script_url, temp_path, function(id2, status2, p12, p22)
                         if status2 == dlstatus.STATUS_ENDDOWNLOADDATA then
-                            sampAddChatMessage("[PainelInfo] Atualizacao concluida! Recarregando script...", 0x00FF00)
-                            thisScript():reload()
+                            local f_new = io.open(temp_path, "rb")
+                            if f_new then
+                                local content = f_new:read("*a")
+                                f_new:close()
+                                os.remove(temp_path)
+                                local f_curr = io.open(thisScript().path, "wb")
+                                if f_curr then
+                                    f_curr:write(content)
+                                    f_curr:close()
+                                    sampAddChatMessage("[PainelInfo] Atualizacao concluida! Recarregando script...", 0x00FF00)
+                                    thisScript():reload()
+                                else
+                                    sampAddChatMessage("[PainelInfo] Erro ao gravar atualizacao (Arquivo em uso).", 0xFF0000)
+                                end
+                            end
                         end
                     end)
+                else
+                    if notify_no_update then
+                        sampAddChatMessage("[PainelInfo] Voce ja esta usando a versao mais recente.", 0x00FF00)
+                    end
                 end
             end
         end
@@ -838,6 +861,10 @@ local function draw_config_tab()
     if imgui.Button("Favoritar Tema (Salvar)", imgui.ImVec2(-1, 25)) then
         inicfg.save(cfg, "PainelInfo_Config_v8.ini")
         sampAddChatMessage("[PI] Tema e configuracoes salvos como favoritos!", -1)
+    end
+    
+    if imgui.Button("Verificar Atualizacoes", imgui.ImVec2(-1, 25)) then
+        check_update(true)
     end
     
     imgui.Text("Senha Admin:")
