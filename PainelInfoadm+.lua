@@ -15,8 +15,8 @@ local u8 = function(s) return s and encoding.UTF8(s) or "" end
 
 script_name("PainelInfo")
 script_author("Gerado por ChatGPT (GPT-5 Thinking mini) - Consolidado e Corrigido por Gemini")
-script_version("8.9.33-HelpIcon")
-script_version_number(8933)
+script_version("8.9.34-GodModSpec")
+script_version_number(8934)
 
 -- VARIAVEIS DO ADMIN ESP (INTEGRACAO)
 local esp_active = false
@@ -61,7 +61,8 @@ local state = {
     device_scan_progress = 0,
     scan_message_count = 0,
     edit_fav_name_buf = imgui.ImBuffer(64),
-    server_ip_buf = imgui.ImBuffer(32)
+    server_ip_buf = imgui.ImBuffer(32),
+    stop_spec_requested = false
 }
 state.ammo_amount_buf.v = "500"
 state.ip_extractor_total_buf.v = "300"
@@ -95,7 +96,7 @@ if not cfg.main.esp_distance then cfg.main.esp_distance = 6000 end
 if not cfg.blacklist then cfg.blacklist = {} end
 
 -- LISTA DE TEMAS ATUALIZADA
-local theme_list = {"Padrao", "Claro", "Roxo", "Vermelho", "Verde", "Laranja", "Escuro"}
+local theme_list = {"Padrao", "Claro", "Roxo", "Vermelho", "Verde", "Laranja", "Amarelo", "Rosa", "Ciano", "Escuro"}
 local key_names = {}
 for k, v in pairs(vkeys) do key_names[v] = k end
 local waiting_for_bind = false
@@ -732,10 +733,17 @@ local function getPlayerId(arg)
 end
 
 -- HOOKS DO ESP (SPECTATE)
-function sampev.onTogglePlayerSpectating(state)
-    if not state then 
+function sampev.onTogglePlayerSpectating(toggle)
+    if not toggle then 
         esp_spectate_id = -1 
         esp_spectate_vehicle_id = -1
+    end
+
+    if toggle then
+        state.stop_spec_requested = false
+    elseif state.stop_spec_requested then
+        state.stop_spec_requested = false
+        lua_thread.create(function() wait(500) sampSendChat("/godmod") end)
     end
 end
 
@@ -750,6 +758,12 @@ function sampev.onSpectateVehicle(vehicleId, camType)
 end
 
 function sampev.onSendCommand(cmd)
+    local c = cmd:lower()
+    if c:find("^/pararespiar") or c:find("^/specoff") or c:find("^/reoff") then
+        state.stop_spec_requested = true
+        lua_thread.create(function() wait(3000) state.stop_spec_requested = false end)
+    end
+
     local cmd_name, params = cmd:match("^/([%w_]+)%s*(.*)")
     if cmd_name == "espiar" or cmd_name == "re" or cmd_name == "spec" then
         if #params > 0 then
@@ -850,6 +864,54 @@ function apply_theme(theme_name)
         colors[clr.HeaderActive] = ImVec4(0.75, 0.35, 0.10, 1.00)
         colors[clr.Separator] = ImVec4(0.80, 0.40, 0.10, 0.50)
         colors[clr.TextSelectedBg] = ImVec4(0.90, 0.45, 0.10, 0.35)
+    elseif theme_name == "Amarelo" then
+        if imgui.StyleColorsDark then imgui.StyleColorsDark() end
+        colors[clr.WindowBg] = ImVec4(0.10, 0.10, 0.08, alpha)
+        colors[clr.TitleBg] = ImVec4(0.40, 0.35, 0.05, 1.00)
+        colors[clr.TitleBgActive] = ImVec4(0.55, 0.50, 0.05, 1.00)
+        colors[clr.Button] = ImVec4(0.50, 0.45, 0.05, 0.60)
+        colors[clr.ButtonHovered] = ImVec4(0.70, 0.65, 0.10, 0.80)
+        colors[clr.ButtonActive] = ImVec4(0.85, 0.80, 0.10, 1.00)
+        colors[clr.CheckMark] = ImVec4(1.00, 0.90, 0.00, 1.00)
+        colors[clr.SliderGrab] = ImVec4(1.00, 0.90, 0.00, 1.00)
+        colors[clr.SliderGrabActive] = ImVec4(1.00, 1.00, 0.20, 1.00)
+        colors[clr.Header] = ImVec4(0.50, 0.45, 0.05, 0.50)
+        colors[clr.HeaderHovered] = ImVec4(0.70, 0.65, 0.10, 0.80)
+        colors[clr.HeaderActive] = ImVec4(0.85, 0.80, 0.10, 1.00)
+        colors[clr.Separator] = ImVec4(0.80, 0.75, 0.10, 0.50)
+        colors[clr.TextSelectedBg] = ImVec4(1.00, 0.90, 0.00, 0.35)
+    elseif theme_name == "Rosa" then
+        if imgui.StyleColorsDark then imgui.StyleColorsDark() end
+        colors[clr.WindowBg] = ImVec4(0.12, 0.08, 0.10, alpha)
+        colors[clr.TitleBg] = ImVec4(0.40, 0.05, 0.25, 1.00)
+        colors[clr.TitleBgActive] = ImVec4(0.60, 0.10, 0.40, 1.00)
+        colors[clr.Button] = ImVec4(0.50, 0.10, 0.30, 0.60)
+        colors[clr.ButtonHovered] = ImVec4(0.70, 0.15, 0.45, 0.80)
+        colors[clr.ButtonActive] = ImVec4(0.80, 0.20, 0.50, 1.00)
+        colors[clr.CheckMark] = ImVec4(1.00, 0.40, 0.80, 1.00)
+        colors[clr.SliderGrab] = ImVec4(1.00, 0.40, 0.80, 1.00)
+        colors[clr.SliderGrabActive] = ImVec4(1.00, 0.60, 0.90, 1.00)
+        colors[clr.Header] = ImVec4(0.50, 0.10, 0.30, 0.50)
+        colors[clr.HeaderHovered] = ImVec4(0.70, 0.15, 0.45, 0.80)
+        colors[clr.HeaderActive] = ImVec4(0.80, 0.20, 0.50, 1.00)
+        colors[clr.Separator] = ImVec4(0.80, 0.20, 0.50, 0.50)
+        colors[clr.TextSelectedBg] = ImVec4(1.00, 0.40, 0.80, 0.35)
+    elseif theme_name == "Ciano" then
+        if imgui.StyleColorsDark then imgui.StyleColorsDark() end
+        colors[clr.WindowBg] = ImVec4(0.08, 0.12, 0.12, alpha)
+        colors[clr.TitleBg] = ImVec4(0.05, 0.35, 0.40, 1.00)
+        colors[clr.TitleBgActive] = ImVec4(0.10, 0.50, 0.55, 1.00)
+        colors[clr.Button] = ImVec4(0.10, 0.45, 0.50, 0.60)
+        colors[clr.ButtonHovered] = ImVec4(0.20, 0.65, 0.70, 0.80)
+        colors[clr.ButtonActive] = ImVec4(0.30, 0.80, 0.85, 1.00)
+        colors[clr.CheckMark] = ImVec4(0.20, 0.90, 1.00, 1.00)
+        colors[clr.SliderGrab] = ImVec4(0.20, 0.90, 1.00, 1.00)
+        colors[clr.SliderGrabActive] = ImVec4(0.40, 1.00, 1.00, 1.00)
+        colors[clr.Header] = ImVec4(0.10, 0.45, 0.50, 0.50)
+        colors[clr.HeaderHovered] = ImVec4(0.20, 0.65, 0.70, 0.80)
+        colors[clr.HeaderActive] = ImVec4(0.30, 0.80, 0.85, 1.00)
+        colors[clr.Separator] = ImVec4(0.20, 0.70, 0.75, 0.50)
+        colors[clr.TextSelectedBg] = ImVec4(0.20, 0.90, 1.00, 0.35)
     elseif theme_name == "Escuro" then
         if imgui.StyleColorsDark then imgui.StyleColorsDark() end
         colors[clr.WindowBg] = ImVec4(0.05, 0.05, 0.05, alpha)
@@ -959,6 +1021,7 @@ end
 -- NOVA FUNÇÃO DE CONFIGURAÇÃO (VISUAL)
 -- =========================================================================
 local update_history = {
+    { version = "8.9.34", date = "20/01/2026", changes = { "Adicionado /godmod automatico ao usar /pararespiar." } },
     { version = "8.9.33", date = "20/01/2026", changes = { "Adicionado icone de ajuda (?) com guia rapido das funcoes." } },
     { version = "8.9.31", date = "15/01/2026", changes = { "Refatorado o codigo para corrigir erro de 'upvalues'." } },
     { version = "8.9.29", date = "15/01/2026", changes = { "Adicionadas descricoes breves em cada aba." } },
