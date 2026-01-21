@@ -137,7 +137,6 @@ end
 
 -- SISTEMA DE ATUALIZACAO AUTOMATICA (GITHUB)
 -- Configure as URLs abaixo com o seu repositorio
-local update_url = "https://raw.githubusercontent.com/nicholassud-beep/paineladmincvr/main/version.json"
 local script_url = "https://raw.githubusercontent.com/nicholassud-beep/paineladmincvr/main/PainelInfoadm%2B.lua"
 
 function check_update(notify_no_update)
