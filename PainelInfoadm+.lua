@@ -15,7 +15,7 @@ local u8 = function(s) return s and encoding.UTF8(s) or "" end
 
 script_name("PainelInfo")
 script_author("Gerado por ChatGPT (GPT-5 Thinking mini) - Consolidado e Corrigido por Gemini")
-script_version("8.9.35-GodModSpec")
+script_version("8.9.34-GodModSpec")
 script_version_number(8934)
 
 -- VARIAVEIS DO ADMIN ESP (INTEGRACAO)
@@ -138,6 +138,7 @@ end
 -- SISTEMA DE ATUALIZACAO AUTOMATICA (GITHUB)
 -- Configure as URLs abaixo com o seu repositorio
 local script_url = "https://raw.githubusercontent.com/nicholassud-beep/paineladmincvr/main/PainelInfoadm%2B.lua"
+local update_url = "https://raw.githubusercontent.com/nicholassud-beep/paineladmincvr/main/version.json"
 
 function check_update(notify_no_update)
     local dlstatus = require('moonloader').download_status
@@ -1828,4 +1829,3 @@ function main()
         end
     end
 end
-
