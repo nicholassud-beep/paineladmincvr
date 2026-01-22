@@ -1752,7 +1752,8 @@ end)
 function check_update(notify)
     local dlstatus = require('moonloader').download_status
     local temp_path = os.getenv('TEMP') .. '\\painelinfo_ver_' .. os.time() .. '.json'
-    downloadUrlToFile("https://raw.githubusercontent.com/nicholassud-beep/paineladmincvr/main/version.json", temp_path, function(id, status, p1, p2)
+    -- Adicionado ?t=... para evitar cache do GitHub e garantir leitura atualizada
+    downloadUrlToFile("https://raw.githubusercontent.com/nicholassud-beep/paineladmincvr/main/version.json?t="..os.time(), temp_path, function(id, status, p1, p2)
         if status == dlstatus.STATUS_ENDDOWNLOADDATA then
             local f = io.open(temp_path, 'r')
             if f then
