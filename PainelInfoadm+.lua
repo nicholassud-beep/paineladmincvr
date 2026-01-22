@@ -1795,6 +1795,7 @@ function check_update(notify)
                 os.remove(temp_path)
                 local remote_ver = info and tonumber(info.latest_version_number)
                 local local_ver = script_ver_num
+                print(string.format("[PainelInfo] Debug Update: Local=%s Remote=%s", tostring(local_ver), tostring(remote_ver)))
                 if remote_ver and remote_ver > local_ver then
                     sampAddChatMessage("[PainelInfo] Nova versao disponivel: v" .. (info.latest_version_text or "?"), 0xFFFF00)
                     sampAddChatMessage("[PainelInfo] Acesse o GitHub para baixar a atualizacao.", 0xFFFF00)
