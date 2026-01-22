@@ -16,7 +16,8 @@ local u8 = function(s) return s and encoding.UTF8(s) or "" end
 script_name("PainelInfo")
 script_author("Gerado por ChatGPT (GPT-5 Thinking mini) - Consolidado e Corrigido por Gemini")
 script_version("8.9.34")
-script_version_number(8934)
+local script_ver_num = 8934
+script_version_number(script_ver_num)
 
 -- VARIAVEIS DO ADMIN ESP (INTEGRACAO)
 local esp_active = false
@@ -76,7 +77,8 @@ local cfg_default = {
         transparency = 0.98,
         admin_pass = "7N0YU3EuhT",
         bind = 123, -- F12
-        server_ip = "15.235.123.105:7777"
+        server_ip = "15.235.123.105:7777",
+        check_updates = true
     },
     blacklist = {}
 }
@@ -89,6 +91,7 @@ if not cfg.main then cfg.main = cfg_default.main end
 if not cfg.main.admin_pass then cfg.main.admin_pass = cfg_default.main.admin_pass end
 state.admin_pass_buf.v = cfg.main.admin_pass
 if not cfg.main.bind then cfg.main.bind = 123 end
+if cfg.main.check_updates == nil then cfg.main.check_updates = true end
 if not cfg.main.server_ip or cfg.main.server_ip == "" then cfg.main.server_ip = cfg_default.main.server_ip end
 if not cfg.main.theme then cfg.main.theme = "Padrao" end
 if not cfg.main.transparency then cfg.main.transparency = 0.98 end
@@ -96,7 +99,7 @@ if not cfg.main.esp_distance then cfg.main.esp_distance = 6000 end
 if not cfg.blacklist then cfg.blacklist = {} end
 
 -- LISTA DE TEMAS ATUALIZADA
-local theme_list = {"Padrao", "Claro", "Roxo", "Vermelho", "Verde", "Laranja", "Amarelo", "Rosa", "Ciano", "Escuro"}
+local theme_list = {"Padrao", "Claro", "Roxo", "Vermelho", "Verde", "Laranja", "Amarelo", "Rosa", "Ciano", "Escuro", "Ajudante", "Moderador", "Administrador", "Coordenador", "Direcao", "Desenvolvedor", "Estagiario"}
 local key_names = {}
 for k, v in pairs(vkeys) do key_names[v] = k end
 local waiting_for_bind = false
@@ -738,7 +741,25 @@ function apply_theme(theme_name)
     style.GrabMinSize = 10.0
     style.GrabRounding = 3.0
 
-    if theme_name == "Claro" then
+    local rank_col = rank_color_map[theme_name]
+    if rank_col then
+        if imgui.StyleColorsDark then imgui.StyleColorsDark() end
+        local r, g, b = rank_col.x, rank_col.y, rank_col.z
+        colors[clr.WindowBg] = ImVec4(r * 0.15, g * 0.15, b * 0.15, alpha)
+        colors[clr.TitleBg] = ImVec4(r * 0.4, g * 0.4, b * 0.4, 1.00)
+        colors[clr.TitleBgActive] = ImVec4(r * 0.6, g * 0.6, b * 0.6, 1.00)
+        colors[clr.Button] = ImVec4(r * 0.4, g * 0.4, b * 0.4, 0.60)
+        colors[clr.ButtonHovered] = ImVec4(r * 0.6, g * 0.6, b * 0.6, 0.80)
+        colors[clr.ButtonActive] = ImVec4(r * 0.8, g * 0.8, b * 0.8, 1.00)
+        colors[clr.CheckMark] = ImVec4(r, g, b, 1.00)
+        colors[clr.SliderGrab] = ImVec4(r, g, b, 1.00)
+        colors[clr.SliderGrabActive] = ImVec4(r, g, b, 1.00)
+        colors[clr.Header] = ImVec4(r * 0.4, g * 0.4, b * 0.4, 0.50)
+        colors[clr.HeaderHovered] = ImVec4(r * 0.6, g * 0.6, b * 0.6, 0.80)
+        colors[clr.HeaderActive] = ImVec4(r * 0.8, g * 0.8, b * 0.8, 1.00)
+        colors[clr.Separator] = ImVec4(r * 0.5, g * 0.5, b * 0.5, 0.50)
+        colors[clr.TextSelectedBg] = ImVec4(r, g, b, 0.35)
+    elseif theme_name == "Claro" then
         if imgui.StyleColorsLight then imgui.StyleColorsLight() end
         colors[clr.WindowBg] = ImVec4(0.82, 0.82, 0.82, alpha) -- Fundo cinza mais suave
         colors[clr.TitleBg] = ImVec4(0.70, 0.70, 0.70, 1.00)
@@ -1075,11 +1096,21 @@ local function draw_config_tab()
     imgui.TextDisabled("Ajuste temas, transparencia, senha de admin e gerencie backups.")
     imgui.Spacing()
     imgui.Spacing()
+
+    local check_updates = imgui.ImBool(cfg.main.check_updates)
+    if imgui.Checkbox("Verificar Atualizacoes ao Iniciar", check_updates) then
+        cfg.main.check_updates = check_updates.v
+        inicfg.save(cfg, "PainelInfo_Config_v8.ini")
+    end
     
     if imgui.Button("Abrir Pasta de Backups", imgui.ImVec2(-1, 25)) then
         local backup_dir = getWorkingDirectory() .. "\\config\\backups"
         if not doesDirectoryExist(backup_dir) then createDirectory(backup_dir) end
         os.execute('explorer "' .. backup_dir .. '"')
+    end
+
+    if imgui.Button("Abrir Repositorio GitHub", imgui.ImVec2(-1, 25)) then
+        os.execute('explorer "https://github.com/nicholassud-beep/paineladmincvr"')
     end
     imgui.Spacing()
     
@@ -1751,7 +1782,8 @@ end)
 
 function check_update(notify)
     local dlstatus = require('moonloader').download_status
-    local temp_path = os.getenv('TEMP') .. '\\painelinfo_ver_' .. os.time() .. '.json'
+    math.randomseed(os.time())
+    local temp_path = os.getenv('TEMP') .. '\\painelinfo_ver_' .. os.time() .. '_' .. math.random(1000, 9999) .. '.json'
     -- Adicionado ?t=... para evitar cache do GitHub e garantir leitura atualizada
     downloadUrlToFile("https://raw.githubusercontent.com/nicholassud-beep/paineladmincvr/main/version.json?t="..os.time(), temp_path, function(id, status, p1, p2)
         if status == dlstatus.STATUS_ENDDOWNLOADDATA then
@@ -1761,7 +1793,7 @@ function check_update(notify)
                 f:close()
                 os.remove(temp_path)
                 local remote_ver = info and tonumber(info.latest_version_number)
-                local local_ver = thisScript().version_number or 0
+                local local_ver = script_ver_num
                 if remote_ver and remote_ver > local_ver then
                     sampAddChatMessage("[PainelInfo] Nova versao disponivel: v" .. (info.latest_version_text or "?"), 0xFFFF00)
                     sampAddChatMessage("[PainelInfo] Acesse o GitHub para baixar a atualizacao.", 0xFFFF00)
@@ -1791,7 +1823,9 @@ function main()
     state.server_ip_buf.v = cfg.main.server_ip or ""
     apply_theme(saved_theme)
     sampAddChatMessage("[PainelInfo] Carregado! Tema: " .. saved_theme, 0x00FF00)
-    check_update()
+    if cfg.main.check_updates then
+        check_update()
+    end
 
     while true do wait(0)
         draw_esp_logic() -- Desenha o ESP se estiver ativo
