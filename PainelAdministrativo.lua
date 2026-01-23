@@ -15,8 +15,8 @@ local u8 = function(s) return s and encoding.UTF8(s) or "" end
 
 script_name("PainelInfoHelper")
 script_author("Gerado por ChatGPT - Adaptado por Gemini")
-script_version("1.0.43")
-script_version_number(1043)
+script_version("1.0.47")
+script_version_number(1047)
 
 -- VARIAVEIS DO ADMIN ESP (INTEGRACAO)
 local esp_active = false
@@ -259,7 +259,8 @@ local function draw_player_header()
     local idw=35; local nickw=150; local profw=180; local lvlw=40
     local st="|"; local sw=imgui.CalcTextSize(st).x; local sp=imgui.GetStyle().ItemSpacing.x; local sc=imgui.GetStyle().Colors[imgui.Col.Separator]
     local p1s=idw; local p2ns=p1s+sw+sp; local p2s=p2ns+nickw
-    imgui.Text("ID"); imgui.SameLine(p1s); imgui.TextColored(sc,st); imgui.SameLine(p2ns); imgui.Text("Nick")
+    local align_offset = imgui.GetStyle().FramePadding.x
+    imgui.SetCursorPosX(imgui.GetCursorPosX() + align_offset); imgui.Text("ID"); imgui.SameLine(p1s); imgui.TextColored(sc,st); imgui.SameLine(p2ns); imgui.Text("Nick")
     local p3ps=p2s+sw+sp; local p3s=p3ps+profw
     imgui.SameLine(p2s); imgui.TextColored(sc,st); imgui.SameLine(p3ps); imgui.Text("Profissao / Cargo")
     local p4ls=p3s+sw+sp
@@ -854,7 +855,9 @@ local function draw_vehicle_header()
     local p1s=idw; local p2ns=p1s+sw+sp; local p2s=p2ns+nw; local p3ps=p2s+sw+sp; local p3s=p3ps+pw; local p4ss=p3s+sw+sp; local p4s=p4ss+spdw; local p5ts=p4s+sw+sp; 
     local function sort_btn(lbl, col)
         local txt = lbl .. (state.current_sort_column == col and (state.sort_direction == 1 and " ^" or " v") or "")
-        if imgui.Selectable(txt, false, 0, imgui.CalcTextSize(txt)) then if state.current_sort_column == col then state.sort_direction = state.sort_direction * -1 else state.current_sort_column = col; state.sort_direction = 1 end end
+        local size = imgui.CalcTextSize(txt)
+        size.x = size.x + imgui.GetStyle().FramePadding.x * 2
+        if imgui.Selectable(txt, false, 0, size) then if state.current_sort_column == col then state.sort_direction = state.sort_direction * -1 else state.current_sort_column = col; state.sort_direction = 1 end end
     end
     sort_btn("ID", "ID"); imgui.SameLine(p1s); imgui.TextColored(sc,st); imgui.SameLine(p2ns); 
     sort_btn("Nome", "Nome"); imgui.SameLine(p2s); imgui.TextColored(sc,st); imgui.SameLine(p3ps); 
@@ -862,9 +865,9 @@ local function draw_vehicle_header()
     sort_btn("Velocidade", "Velocidade"); imgui.SameLine(p4s); imgui.TextColored(sc,st); imgui.SameLine(p5ts); 
     sort_btn("Tipo", "Tipo"); imgui.Separator() 
 end
-local function draw_skin_header() local idw=50; local st="|"; local sw=imgui.CalcTextSize(st).x; local sp=imgui.GetStyle().ItemSpacing.x; local sc=imgui.GetStyle().Colors[imgui.Col.Separator]; local p1s=idw; local p2ns=p1s+sw+sp; imgui.Text("ID"); imgui.SameLine(p1s); imgui.TextColored(sc,st); imgui.SameLine(p2ns); imgui.Text("Nome"); imgui.Separator() end
-local function draw_profession_header() local nw=220; local lw=60; local st="|"; local sw=imgui.CalcTextSize(st).x; local sp=imgui.GetStyle().ItemSpacing.x; local sc=imgui.GetStyle().Colors[imgui.Col.Separator]; local p1s=nw; local p2ls=p1s+sw+sp; local p2s=p2ls+lw; local p3ss=p2s+sw+sp; imgui.Text("Profissao"); imgui.SameLine(p1s); imgui.TextColored(sc,st); imgui.SameLine(p2ls); imgui.Text("Lvl Min"); imgui.SameLine(p2s); imgui.TextColored(sc,st); imgui.SameLine(p3ss); imgui.Text("Salario"); imgui.Separator() end
-local function draw_weapon_header() local idw=50; local nw=200; local st="|"; local sw=imgui.CalcTextSize(st).x; local sp=imgui.GetStyle().ItemSpacing.x; local sc=imgui.GetStyle().Colors[imgui.Col.Separator]; local p1s=idw; local p2ns=p1s+sw+sp; local p2s=p2ns+nw; local p3ts=p2s+sw+sp; imgui.Text("ID"); imgui.SameLine(p1s); imgui.TextColored(sc,st); imgui.SameLine(p2ns); imgui.Text("Nome"); imgui.SameLine(p2s); imgui.TextColored(sc,st); imgui.SameLine(p3ts); imgui.Text("Tipo"); imgui.Separator() end
+local function draw_skin_header() local idw=50; local st="|"; local sw=imgui.CalcTextSize(st).x; local sp=imgui.GetStyle().ItemSpacing.x; local sc=imgui.GetStyle().Colors[imgui.Col.Separator]; local p1s=idw; local p2ns=p1s+sw+sp; local align_offset = imgui.GetStyle().FramePadding.x; imgui.SetCursorPosX(imgui.GetCursorPosX() + align_offset); imgui.Text("ID"); imgui.SameLine(p1s); imgui.TextColored(sc,st); imgui.SameLine(p2ns); imgui.Text("Nome"); imgui.Separator() end
+local function draw_profession_header() local nw=220; local lw=60; local st="|"; local sw=imgui.CalcTextSize(st).x; local sp=imgui.GetStyle().ItemSpacing.x; local sc=imgui.GetStyle().Colors[imgui.Col.Separator]; local p1s=nw; local p2ls=p1s+sw+sp; local p2s=p2ls+lw; local p3ss=p2s+sw+sp; local align_offset = imgui.GetStyle().FramePadding.x; imgui.SetCursorPosX(imgui.GetCursorPosX() + align_offset); imgui.Text("Profissao"); imgui.SameLine(p1s); imgui.TextColored(sc,st); imgui.SameLine(p2ls); imgui.Text("Lvl Min"); imgui.SameLine(p2s); imgui.TextColored(sc,st); imgui.SameLine(p3ss); imgui.Text("Salario"); imgui.Separator() end
+local function draw_weapon_header() local idw=50; local nw=200; local st="|"; local sw=imgui.CalcTextSize(st).x; local sp=imgui.GetStyle().ItemSpacing.x; local sc=imgui.GetStyle().Colors[imgui.Col.Separator]; local p1s=idw; local p2ns=p1s+sw+sp; local p2s=p2ns+nw; local p3ts=p2s+sw+sp; local align_offset = imgui.GetStyle().FramePadding.x; imgui.SetCursorPosX(imgui.GetCursorPosX() + align_offset); imgui.Text("ID"); imgui.SameLine(p1s); imgui.TextColored(sc,st); imgui.SameLine(p2ns); imgui.Text("Nome"); imgui.SameLine(p2s); imgui.TextColored(sc,st); imgui.SameLine(p3ts); imgui.Text("Tipo"); imgui.Separator() end
 
 local function start_admin_login()
     sampSendChat("/logaradm")
@@ -893,7 +896,7 @@ function imgui.OnDrawFrame()
     if state.window_open.v then
         local sw, sh = getScreenResolution(); imgui.SetNextWindowPos(imgui.ImVec2(sw / 2, sh / 2), imgui.Cond.FirstUseEver, imgui.ImVec2(0.5, 0.5)); imgui.SetNextWindowSize(imgui.ImVec2(700, 500), imgui.Cond.FirstUseEver)
         
-        imgui.Begin("Painel Helper [F12] - v1.0.39", state.window_open)
+        imgui.Begin("Painel Helper [F12] - v1.0.47", state.window_open)
 
         local tabs = { {1, "Novatos"}, {2, "Online"}, {4, "Informacoes"}, {9, "Locais"}, {13, "Comandos"}, {11, "Config"} }; local btn_space = imgui.GetWindowWidth() / #tabs; local btn_w = imgui.ImVec2(math.floor(btn_space) - 5, 25); local act_bg=IMAGE_WHITE; local act_hov=imgui.ImVec4(.8,.8,.8,1); local act_txt=IMAGE_BLACK; local inact_bg=imgui.GetStyle().Colors[imgui.Col.Button]; local inact_hov=imgui.GetStyle().Colors[imgui.Col.ButtonHovered]; local inact_txt=imgui.GetStyle().Colors[imgui.Col.Text]
         for i, tab in ipairs(tabs) do local tid, tnm = tab[1], tab[2]; local is_act = state.active_tab == tid; if is_act then imgui.PushStyleColor(imgui.Col.Button,act_bg); imgui.PushStyleColor(imgui.Col.ButtonHovered,act_hov); imgui.PushStyleColor(imgui.Col.ButtonActive,act_hov); imgui.PushStyleColor(imgui.Col.Text,act_txt) else imgui.PushStyleColor(imgui.Col.Button,inact_bg); imgui.PushStyleColor(imgui.Col.ButtonHovered,inact_hov); imgui.PushStyleColor(imgui.Col.ButtonActive,inact_hov); imgui.PushStyleColor(imgui.Col.Text,inact_txt) end; if imgui.Button(tnm, btn_w) then if state.active_tab ~= tid then state.active_tab=tid end end; imgui.PopStyleColor(4); if i < #tabs then imgui.SameLine(0, 2) end end; imgui.Separator(); imgui.Text(string.format("Atualizacao: %s", os.date("%H:%M:%S"))); imgui.Spacing()
@@ -1044,14 +1047,16 @@ function imgui.OnDrawFrame()
             local function render_list(list)
                 local idw=35; local nickw=150; local profw=180; local lvlw=40
                 local sc=imgui.GetStyle().Colors[imgui.Col.Separator]; local st="|"; local sw=imgui.CalcTextSize(st).x; local sp=imgui.GetStyle().ItemSpacing.x
+                local align_offset = imgui.GetStyle().FramePadding.x
                 for _,p in ipairs(list) do
                     local is_s=p.is_staff; local paused=sampIsPlayerPaused(p.id); local disp_p=p.profession or "?"; if paused then if is_s then disp_p=u8(p.profession).." (AFK)" else disp_p="AFK" end end
+                    local curX = imgui.GetCursorPosX()
                     local line_lbl=string.format("##p_%d",p.id)
-                    imgui.Selectable(line_lbl, false, imgui.SelectableFlags_SpanAllColumns, imgui.ImVec2(0, imgui.GetTextLineHeight()))
+                    imgui.Selectable(line_lbl, false, 0, imgui.ImVec2(0, imgui.GetTextLineHeight()))
                     if imgui.BeginPopupContextItem("p_act"..p.id) then if imgui.MenuItem("CP Nick") then imgui.SetClipboardText(u8(p.nick)); sampAddChatMessage("Nick CP",0) end; if p.profession then if imgui.MenuItem("CP Info") then imgui.SetClipboardText(u8(p.profession)); sampAddChatMessage("Info CP",0) end end; imgui.Separator(); if imgui.MenuItem("Ir ID") then sampSendChat("/ir "..p.id); state.window_open.v=false; imgui.Process=false end; if imgui.MenuItem("Espiar ID") then sampSendChat("/espiar "..p.id); state.window_open.v=false; imgui.Process=false end; imgui.EndPopup() end
                     
                     local p1s=idw; local p2ns=p1s+sw+sp; local p2s=p2ns+nickw; local p3ps=p2s+sw+sp; local p3s=p3ps+profw; local p4ls=p3s+sw+sp; local p4s=p4ls+lvlw; local p5ps=p4s+sw+sp
-                    imgui.SameLine(0); imgui.TextColored(p.color,tostring(p.id))
+                    imgui.SameLine(curX + align_offset); imgui.TextColored(p.color,tostring(p.id))
                     imgui.SameLine(p1s); imgui.TextColored(sc,st); imgui.SameLine(p2ns); imgui.TextColored(p.color,u8(p.nick))
                     imgui.SameLine(p2s); imgui.TextColored(sc,st); imgui.SameLine(p3ps); local tc=paused and IMAGE_GREY or p.color; imgui.TextColored(tc,u8(disp_p))
                     imgui.SameLine(p3s); imgui.TextColored(sc,st); imgui.SameLine(p4ls); imgui.TextColored(p.color,tostring(p.Level))
@@ -1078,11 +1083,13 @@ function imgui.OnDrawFrame()
                 local function rend_p(l,h,c) 
                     if #l>0 then 
                         imgui.TextColored(c,h); imgui.Spacing(); 
+                        local align_offset = imgui.GetStyle().FramePadding.x
                         for _,p in ipairs(l) do 
+                            local curX = imgui.GetCursorPosX()
                             local nw=220; local lw=60; local st="|"; local sw=imgui.CalcTextSize(st).x; local sp=imgui.GetStyle().ItemSpacing.x; local sc=imgui.GetStyle().Colors[imgui.Col.Separator]; local p1s=nw; local p2ls=p1s+sw+sp; local p2s=p2ls+lw; local p3ss=p2s+sw+sp;
                             local lbl=string.format("##pli_%s%d",p.name or "u", p.level or 0); 
-                            imgui.Selectable(lbl,false,imgui.SelectableFlags.SpanAllColumns,imgui.ImVec2(0,imgui.GetTextLineHeight())); 
-                            imgui.SameLine(0); imgui.Text(p.name or "?"); imgui.SameLine(p1s); imgui.TextColored(sc,st); imgui.SameLine(p2ls); imgui.Text(tostring(p.level or "?")); imgui.SameLine(p2s); imgui.TextColored(sc,st); imgui.SameLine(p3ss); imgui.TextColored(IMAGE_YELLOW,"$"..formatPrice(p.salary or 0)) 
+                            imgui.Selectable(lbl,false,0,imgui.ImVec2(0,imgui.GetTextLineHeight())); 
+                            imgui.SameLine(curX + align_offset); imgui.Text(p.name or "?"); imgui.SameLine(p1s); imgui.TextColored(sc,st); imgui.SameLine(p2ls); imgui.Text(tostring(p.level or "?")); imgui.SameLine(p2s); imgui.TextColored(sc,st); imgui.SameLine(p3ss); imgui.TextColored(IMAGE_YELLOW,"$"..formatPrice(p.salary or 0)) 
                         end 
                     end 
                 end; 
@@ -1093,32 +1100,37 @@ function imgui.OnDrawFrame()
                 local filt_v=filter_vehicles(vehicles,search_u8,state.current_sort_column,state.sort_direction); local cnt=#filt_v; imgui.Text("Veiculos: "..cnt); imgui.Separator();
                 imgui.BeginChild("VehListInfo",imgui.ImVec2(0,0),true); draw_vehicle_header(); if cnt==0 then imgui.Text("Nenhum.") else 
                     for _,v in ipairs(filt_v) do 
+                        local curX = imgui.GetCursorPosX()
                         local idw=50; local nw=180; local pw=100; local spdw=100; local st="|"; local sw=imgui.CalcTextSize(st).x; local sp=imgui.GetStyle().ItemSpacing.x; local sc=imgui.GetStyle().Colors[imgui.Col.Separator]; local p1s=idw; local p2ns=p1s+sw+sp; local p2s=p2ns+nw; local p3ps=p2s+sw+sp; local p3s=p3ps+pw; local p4ss=p3s+sw+sp; local p4s=p4ss+spdw; local p5ts=p4s+sw+sp;
                         local align_offset = imgui.GetStyle().FramePadding.x
                         local lbl=string.format("##vli_%d",v.id); 
-                        imgui.Selectable(lbl,false,imgui.SelectableFlags.SpanAllColumns,imgui.ImVec2(0,imgui.GetTextLineHeight())); 
+                        imgui.Selectable(lbl,false,0,imgui.ImVec2(0,imgui.GetTextLineHeight())); 
                         if imgui.IsItemHovered() and imgui.IsMouseDoubleClicked(0) then sampSendChat("/cv "..v.id); sampAddChatMessage("[PI] Criando veiculo ID "..v.id.." ("..v.name..")",-1) end; 
-                        imgui.SameLine(0 + align_offset); imgui.Text(tostring(v.id)); imgui.SameLine(p1s); imgui.TextColored(sc,st); imgui.SameLine(p2ns + align_offset); imgui.Text(v.name); imgui.SameLine(p2s); imgui.TextColored(sc,st); imgui.SameLine(p3ps + align_offset); imgui.TextColored(IMAGE_YELLOW,"$"..formatPrice(v.price)); imgui.SameLine(p3s); imgui.TextColored(sc,st); imgui.SameLine(p4ss + align_offset); imgui.TextColored(IMAGE_PINK,v.speed.." km/h"); imgui.SameLine(p4s); imgui.TextColored(sc,st); imgui.SameLine(p5ts + align_offset); imgui.TextColored(IMAGE_BLUE,v.type) 
+                        imgui.SameLine(curX + align_offset); imgui.Text(tostring(v.id)); imgui.SameLine(p1s); imgui.TextColored(sc,st); imgui.SameLine(p2ns + align_offset); imgui.Text(v.name); imgui.SameLine(p2s); imgui.TextColored(sc,st); imgui.SameLine(p3ps + align_offset); imgui.TextColored(IMAGE_YELLOW,"$"..formatPrice(v.price)); imgui.SameLine(p3s); imgui.TextColored(sc,st); imgui.SameLine(p4ss + align_offset); imgui.TextColored(IMAGE_PINK,v.speed.." km/h"); imgui.SameLine(p4s); imgui.TextColored(sc,st); imgui.SameLine(p5ts + align_offset); imgui.TextColored(IMAGE_BLUE,v.type) 
                     end 
                 end; imgui.EndChild()
             elseif state.active_info_sub_tab == 3 then -- Skins
                 imgui.TextDisabled("Lista de skins e IDs. Apenas informativo.")
                 local filt_s=filter_skins(search_u8); local cnt=#filt_s; imgui.Text("Skins: "..cnt); imgui.Separator(); imgui.BeginChild("SkinListInfo",imgui.ImVec2(0,0),true); draw_skin_header(); if cnt==0 then imgui.Text("Nenhuma.") else 
+                    local align_offset = imgui.GetStyle().FramePadding.x
                     for _,s in ipairs(filt_s) do 
+                        local curX = imgui.GetCursorPosX()
                         local idw=50; local st="|"; local sw=imgui.CalcTextSize(st).x; local sp=imgui.GetStyle().ItemSpacing.x; local sc=imgui.GetStyle().Colors[imgui.Col.Separator]; local p1s=idw; local p2ns=p1s+sw+sp;
                         local lbl=string.format("##sli_%d",s.id); 
-                        imgui.Selectable(lbl,false,imgui.SelectableFlags.SpanAllColumns,imgui.ImVec2(0,imgui.GetTextLineHeight())); 
-                        imgui.SameLine(0); imgui.Text(tostring(s.id)); imgui.SameLine(p1s); imgui.TextColored(sc,st); imgui.SameLine(p2ns); imgui.Text(s.name or "?") 
+                        imgui.Selectable(lbl,false,0,imgui.ImVec2(0,imgui.GetTextLineHeight())); 
+                        imgui.SameLine(curX + align_offset); imgui.Text(tostring(s.id)); imgui.SameLine(p1s); imgui.TextColored(sc,st); imgui.SameLine(p2ns); imgui.Text(s.name or "?") 
                     end 
                 end; imgui.EndChild()
             elseif state.active_info_sub_tab == 4 then -- Armas
                 imgui.TextDisabled("Lista de armas e IDs. Apenas informativo.")
                 local filt_w=filter_weapons(weapons_list,search_u8); local cnt=#filt_w; imgui.Text("Armas: "..cnt); imgui.Separator(); imgui.BeginChild("WeaponListInfo",imgui.ImVec2(0,0),true); draw_weapon_header(); if cnt==0 then imgui.Text("Nenhuma.") else 
+                    local align_offset = imgui.GetStyle().FramePadding.x
                     for _,w in ipairs(filt_w) do 
+                        local curX = imgui.GetCursorPosX()
                         local idw=50; local nw=200; local st="|"; local sw=imgui.CalcTextSize(st).x; local sp=imgui.GetStyle().ItemSpacing.x; local sc=imgui.GetStyle().Colors[imgui.Col.Separator]; local p1s=idw; local p2ns=p1s+sw+sp; local p2s=p2ns+nw; local p3ts=p2s+sw+sp;
                         local lbl=string.format("##wli_%d",w.id); 
-                        imgui.Selectable(lbl,false,imgui.SelectableFlags.SpanAllColumns,imgui.ImVec2(0,imgui.GetTextLineHeight())); 
-                        imgui.SameLine(0); imgui.Text(tostring(w.id)); imgui.SameLine(p1s); imgui.TextColored(sc,st); imgui.SameLine(p2ns); imgui.Text(w.name or "?"); imgui.SameLine(p2s); imgui.TextColored(sc,st); imgui.SameLine(p3ts); imgui.TextColored(IMAGE_BLUE,w.type or "?") 
+                        imgui.Selectable(lbl,false,0,imgui.ImVec2(0,imgui.GetTextLineHeight())); 
+                        imgui.SameLine(curX + align_offset); imgui.Text(tostring(w.id)); imgui.SameLine(p1s); imgui.TextColored(sc,st); imgui.SameLine(p2ns); imgui.Text(w.name or "?"); imgui.SameLine(p2s); imgui.TextColored(sc,st); imgui.SameLine(p3ts); imgui.TextColored(IMAGE_BLUE,w.type or "?") 
                     end 
                 end; imgui.EndChild()
             end
@@ -1169,12 +1181,15 @@ function imgui.OnDrawFrame()
                 local sc = imgui.GetStyle().Colors[imgui.Col.Separator]
                 
                 local p1s = nw; local p2cs = p1s + sw + sp; local p2s = p2cs + cw; local p3is = p2s + sw + sp
-                imgui.Text("Nome Local"); imgui.SameLine(p1s); imgui.TextColored(sc, st); imgui.SameLine(p2cs); imgui.Text("Coords (X,Y,Z)"); imgui.SameLine(p2s); imgui.TextColored(sc, st); imgui.SameLine(p3is); imgui.Text("Int")
+                local align_offset = imgui.GetStyle().FramePadding.x
+                imgui.SetCursorPosX(imgui.GetCursorPosX() + align_offset); imgui.Text("Nome Local"); imgui.SameLine(p1s); imgui.TextColored(sc, st); imgui.SameLine(p2cs); imgui.Text("Coords (X,Y,Z)"); imgui.SameLine(p2s); imgui.TextColored(sc, st); imgui.SameLine(p3is); imgui.Text("Int")
                 imgui.Separator()
 
+                local align_offset = imgui.GetStyle().FramePadding.x
                 for _, loc in ipairs(filt_evt) do
-                    local lbl = string.format("##evt_%s", loc.name)
-                    imgui.Selectable(lbl, false, imgui.SelectableFlags.SpanAllColumns, imgui.ImVec2(0, imgui.GetTextLineHeight()))
+                    local curX = imgui.GetCursorPosX()
+                    local lbl = string.format("##evt_%s_%s", loc.name, tostring(loc))
+                    imgui.Selectable(lbl, false, 0, imgui.ImVec2(0, imgui.GetTextLineHeight()))
                     
                     if imgui.BeginPopupContextItem() then
                         if imgui.Selectable("Remover dos Favoritos") then
@@ -1197,7 +1212,7 @@ function imgui.OnDrawFrame()
                     end
                     if imgui.IsItemHovered() then imgui.SetTooltip("Duplo clique para ir") end
 
-                    imgui.SameLine(0); imgui.Text(loc.name or "Sem Nome")
+                    imgui.SameLine(curX + align_offset); imgui.Text(loc.name or "Sem Nome")
                     imgui.SameLine(p1s); imgui.TextColored(sc, st)
                     imgui.SameLine(p2cs); imgui.TextColored(IMAGE_PINK, string.format("%.1f, %.1f, %.1f", loc.x, loc.y, loc.z))
                     imgui.SameLine(p2s); imgui.TextColored(sc, st)
