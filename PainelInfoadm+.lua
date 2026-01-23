@@ -10,13 +10,13 @@ local bit = require 'bit'
 local imgui = require 'imgui'
 local vkeys = require 'vkeys'
 local encoding = require 'encoding'
-encoding.default = 'CP1251'
+encoding.default = 'CP1252'
 local u8 = function(s) return s and encoding.UTF8(s) or "" end
 
 script_name("PainelInfo")
 script_author("Gerado por ChatGPT (GPT-5 Thinking mini) - Consolidado e Corrigido por Gemini")
-script_version("8.9.35")
-local script_ver_num = 8935
+script_version("8.9.36")
+local script_ver_num = 8936
 script_version_number(script_ver_num)
 
 -- VARIAVEIS DO ADMIN ESP (INTEGRACAO)
@@ -929,12 +929,12 @@ local function draw_player_header(show_pcol)
     imgui.Text("ID"); imgui.SameLine(p1s); imgui.TextColored(sc,st); imgui.SameLine(p2ns); imgui.Text("Nick")
     local p3ps,p3s,p4ls,p4s,p5ps
     if show_pcol then
-        p3ps=p2s+sw+sp; p3s=p3ps+profw; imgui.SameLine(p2s); imgui.TextColored(sc,st); imgui.SameLine(p3ps); imgui.Text("Profissao / Cargo") -- Sem acento
+        p3ps=p2s+sw+sp; p3s=p3ps+profw; imgui.SameLine(p2s); imgui.TextColored(sc,st); imgui.SameLine(p3ps); imgui.Text("Profissão / Cargo")
         p4ls=p3s+sw+sp
     else
         p4ls=p2s+sw+sp
     end
-    imgui.SameLine(show_pcol and p3s or p2s); imgui.TextColored(sc,st); imgui.SameLine(p4ls); imgui.Text("Nivel") -- Sem acento
+    imgui.SameLine(show_pcol and p3s or p2s); imgui.TextColored(sc,st); imgui.SameLine(p4ls); imgui.Text("Nível")
     p4s=p4ls+lvlw; p5ps=p4s+sw+sp; imgui.SameLine(p4s); imgui.TextColored(sc,st); imgui.SameLine(p5ps); imgui.Text("Ping")
     imgui.Separator()
 end
@@ -947,11 +947,11 @@ local function draw_vehicle_header()
     end
     sort_btn("ID", "ID"); imgui.SameLine(p1s); imgui.TextColored(sc,st); imgui.SameLine(p2ns); 
     sort_btn("Nome", "Nome"); imgui.SameLine(p2s); imgui.TextColored(sc,st); imgui.SameLine(p3ps); 
-    sort_btn("Preco", "Preco"); imgui.SameLine(p3s); imgui.TextColored(sc,st); imgui.SameLine(p4ss); 
+    sort_btn("Preço", "Preco"); imgui.SameLine(p3s); imgui.TextColored(sc,st); imgui.SameLine(p4ss); 
     sort_btn("Velocidade", "Velocidade"); imgui.SameLine(p4s); imgui.TextColored(sc,st); imgui.SameLine(p5ts); 
     sort_btn("Tipo", "Tipo"); imgui.Separator() 
 end
-local function draw_skin_header() local idw=50; local st="|"; local sw=imgui.CalcTextSize(st).x; local sp=imgui.GetStyle().ItemSpacing.x; local sc=imgui.GetStyle().Colors[imgui.Col.Separator]; local p1s=idw; local p2ns=p1s+sw+sp; imgui.Text("ID"); imgui.SameLine(p1s); imgui.TextColored(sc,st); imgui.SameLine(p2ns); imgui.Text("Nome"); imgui.Separator() end
+local function draw_profession_header() local nw=250; local lw=100; local swid=110; local st="|"; local sw=imgui.CalcTextSize(st).x; local sp=imgui.GetStyle().ItemSpacing.x; local sc=imgui.GetStyle().Colors[imgui.Col.Separator]; local p1s=nw; local p2ls=p1s+sw+sp; local p2s=p2ls+lw; local p3ss=p2s+sw+sp; imgui.Text("Profissão"); imgui.SameLine(p1s); imgui.TextColored(sc,st); imgui.SameLine(p2ls); imgui.Text("Lvl Min"); imgui.SameLine(p2s); imgui.TextColored(sc,st); imgui.SameLine(p3ss); imgui.Text("Salário"); imgui.Separator() end
 local function draw_profession_header() local nw=250; local lw=100; local swid=110; local st="|"; local sw=imgui.CalcTextSize(st).x; local sp=imgui.GetStyle().ItemSpacing.x; local sc=imgui.GetStyle().Colors[imgui.Col.Separator]; local p1s=nw; local p2ls=p1s+sw+sp; local p2s=p2ls+lw; local p3ss=p2s+sw+sp; imgui.Text("Profissao"); imgui.SameLine(p1s); imgui.TextColored(sc,st); imgui.SameLine(p2ls); imgui.Text("Lvl Min"); imgui.SameLine(p2s); imgui.TextColored(sc,st); imgui.SameLine(p3ss); imgui.Text("Salario"); imgui.Separator() end
 local function draw_weapon_header() local idw=60; local nw=250; local st="|"; local sw=imgui.CalcTextSize(st).x; local sp=imgui.GetStyle().ItemSpacing.x; local sc=imgui.GetStyle().Colors[imgui.Col.Separator]; local p1s=idw; local p2ns=p1s+sw+sp; local p2s=p2ns+nw; local p3ts=p2s+sw+sp; imgui.Text("ID"); imgui.SameLine(p1s); imgui.TextColored(sc,st); imgui.SameLine(p2ns); imgui.Text("Nome"); imgui.SameLine(p2s); imgui.TextColored(sc,st); imgui.SameLine(p3ts); imgui.Text("Tipo"); imgui.Separator() end
 local function draw_interior_header() local nw=300; local cw=200; local st="|"; local sw=imgui.CalcTextSize(st).x; local sp=imgui.GetStyle().ItemSpacing.x; local sc=imgui.GetStyle().Colors[imgui.Col.Separator]; local p1s=nw; local p2cs=p1s+sw+sp; local p2s=p2cs+cw; local p3is=p2s+sw+sp; imgui.Text("Nome"); imgui.SameLine(p1s); imgui.TextColored(sc,st); imgui.SameLine(p2cs); imgui.Text("Coords (X,Y,Z)"); imgui.SameLine(p2s); imgui.TextColored(sc,st); imgui.SameLine(p3is); imgui.Text("ID"); imgui.Separator() end
@@ -971,6 +971,7 @@ end
 -- NOVA FUNÇÃO DE CONFIGURAÇÃO (VISUAL)
 -- =========================================================================
 local update_history = {
+    { version = "8.9.36", date = "22/01/2026", changes = { "Correcao de acentuacao (removido u8 duplicado).", "Adicionados acentos na interface." } },
     { version = "8.9.35", date = "22/01/2026", changes = { "Adicionado botao manual de verificar atualizacoes na aba Config." } },
     { version = "8.9.34", date = "20/01/2026", changes = { "Adicionado /godmod automatico ao usar /pararespiar." } },
     { version = "8.9.33", date = "20/01/2026", changes = { "Adicionado icone de ajuda (?) com guia rapido das funcoes." } },
@@ -1295,9 +1296,9 @@ end
 
 local function draw_info_tab()
     local search_u8 = u8(state.search_text.v):lower(); local search_cp = string.lower(state.search_text.v)
-    local sub_tabs={{1,"Profissoes"},{2,"Veiculos"},{3,"Skins"},{4,"Armas"},{5,"Duvidas"}}; local sub_space=(imgui.GetWindowWidth()-25)/#sub_tabs; local sub_btn_w=imgui.ImVec2(math.floor(sub_space)-5,22); local act_bg=IMAGE_WHITE; local act_hov=imgui.ImVec4(.8,.8,.8,1); local act_txt=IMAGE_BLACK; local inact_bg=imgui.GetStyle().Colors[imgui.Col.Button]; local inact_hov=imgui.GetStyle().Colors[imgui.Col.ButtonHovered]; local inact_txt=imgui.GetStyle().Colors[imgui.Col.Text]
+    local sub_tabs={{1,"Profissões"},{2,"Veículos"},{3,"Skins"},{4,"Armas"},{5,"Dúvidas"}}; local sub_space=(imgui.GetWindowWidth()-25)/#sub_tabs; local sub_btn_w=imgui.ImVec2(math.floor(sub_space)-5,22); local act_bg=IMAGE_WHITE; local act_hov=imgui.ImVec4(.8,.8,.8,1); local act_txt=IMAGE_BLACK; local inact_bg=imgui.GetStyle().Colors[imgui.Col.Button]; local inact_hov=imgui.GetStyle().Colors[imgui.Col.ButtonHovered]; local inact_txt=imgui.GetStyle().Colors[imgui.Col.Text]
     for i,sub in ipairs(sub_tabs) do local sid,snm=sub[1],sub[2]; local is_act=state.active_info_sub_tab==sid; if is_act then imgui.PushStyleColor(imgui.Col.Button,act_bg); imgui.PushStyleColor(imgui.Col.ButtonHovered,act_hov); imgui.PushStyleColor(imgui.Col.ButtonActive,act_hov); imgui.PushStyleColor(imgui.Col.Text,act_txt) else imgui.PushStyleColor(imgui.Col.Button,inact_bg); imgui.PushStyleColor(imgui.Col.ButtonHovered,inact_hov); imgui.PushStyleColor(imgui.Col.ButtonActive,inact_hov); imgui.PushStyleColor(imgui.Col.Text,inact_txt) end; if imgui.Button(snm,sub_btn_w) then state.active_info_sub_tab=sid end; imgui.PopStyleColor(4); if i<#sub_tabs then imgui.SameLine(0,2) end end; imgui.Spacing(); imgui.Separator()
-    if state.active_info_sub_tab==3 or state.active_info_sub_tab==4 then imgui.Text("Aplicar em:"); imgui.SameLine(); imgui.PushItemWidth(80); imgui.InputText("ID##TargetID",state.target_id_buf); imgui.PopItemWidth(); imgui.SameLine(); if imgui.Button("Eu") then local _,mid=sampGetPlayerIdByCharHandle(PLAYER_PED); state.target_id_buf.v=tostring(mid) end; if state.active_info_sub_tab==4 then imgui.SameLine(); imgui.Text("Municao:"); imgui.SameLine(); imgui.PushItemWidth(80); imgui.InputText("##AmmoAmount",state.ammo_amount_buf); imgui.PopItemWidth() end; imgui.Spacing() end
+    if state.active_info_sub_tab==3 or state.active_info_sub_tab==4 then imgui.Text("Aplicar em:"); imgui.SameLine(); imgui.PushItemWidth(80); imgui.InputText("ID##TargetID",state.target_id_buf); imgui.PopItemWidth(); imgui.SameLine(); if imgui.Button("Eu") then local _,mid=sampGetPlayerIdByCharHandle(PLAYER_PED); state.target_id_buf.v=tostring(mid) end; if state.active_info_sub_tab==4 then imgui.SameLine(); imgui.Text("Munição:"); imgui.SameLine(); imgui.PushItemWidth(80); imgui.InputText("##AmmoAmount",state.ammo_amount_buf); imgui.PopItemWidth() end; imgui.Spacing() end
 
     if state.active_info_sub_tab == 1 then -- Profissoes
         imgui.TextDisabled("Lista de profissoes. Duplo clique para definir (setprof).")
@@ -1306,7 +1307,7 @@ local function draw_info_tab()
         imgui.PopItemWidth()
         imgui.SameLine()
         local selected_prof_type = prof_types[state.prof_type_filter_idx.v + 1]
-        imgui.TextColored(IMAGE_GREEN,"Profissoes:"); imgui.Separator(); local filt_p=filter_professions(professions,search_cp); local cnt=#filt_p; local leg,maf={}, {}; for _,p in ipairs(filt_p) do if p.type=="Mafia" then table.insert(maf,p) else table.insert(leg,p) end end; imgui.Text("Encontradas: "..cnt); imgui.Separator(); imgui.BeginChild("ProfListInfo",imgui.ImVec2(0,0),true); draw_profession_header(); 
+        imgui.TextColored(IMAGE_GREEN,"Profissões:"); imgui.Separator(); local filt_p=filter_professions(professions,search_cp); local cnt=#filt_p; local leg,maf={}, {}; for _,p in ipairs(filt_p) do if p.type=="Mafia" then table.insert(maf,p) else table.insert(leg,p) end end; imgui.Text("Encontradas: "..cnt); imgui.Separator(); imgui.BeginChild("ProfListInfo",imgui.ImVec2(0,0),true); draw_profession_header(); 
         local function rend_p(l,h,c) 
             if #l>0 then 
                 imgui.TextColored(c,h); imgui.Spacing(); 
@@ -1351,7 +1352,7 @@ local function draw_info_tab()
         imgui.PopItemWidth()
         imgui.SameLine()
         local selected_type = veh_types[state.veh_type_filter_idx.v + 1]
-        local filt_v=filter_vehicles(vehicles,search_u8,state.current_sort_column,state.sort_direction,selected_type); local cnt=#filt_v; imgui.Text("Veiculos: "..cnt); imgui.Separator();
+        local filt_v=filter_vehicles(vehicles,search_u8,state.current_sort_column,state.sort_direction,selected_type); local cnt=#filt_v; imgui.Text("Veículos: "..cnt); imgui.Separator();
         imgui.BeginChild("VehListInfo",imgui.ImVec2(0,0),true); draw_vehicle_header(); if cnt==0 then imgui.Text("Nenhum.") else 
             local idw=50; local nw=180; local pw=110; local swid=110; local typew=100; 
             local sc=IMAGE_GREY; local st="|"; local stw=imgui.CalcTextSize(st).x; local sp=imgui.GetStyle().ItemSpacing.x; 
@@ -1719,9 +1720,9 @@ function imgui.OnDrawFrame()
     if state.window_open.v then
         local sw, sh = getScreenResolution(); imgui.SetNextWindowPos(imgui.ImVec2(sw / 2, sh / 2), imgui.Cond.FirstUseEver, imgui.ImVec2(0.5, 0.5)); imgui.SetNextWindowSize(imgui.ImVec2(700, 500), imgui.Cond.FirstUseEver)
         
-        imgui.Begin("Painel Admin [F12] - v8.9.35", state.window_open)
+        imgui.Begin("Painel Admin [F12] - v8.9.36", state.window_open)
 
-        local tabs = { {1, "Novatos"}, {2, "Online"}, {4, "Informacoes"}, {9, "Locais"}, {13, "Comandos"}, {11, "Config"} }; local btn_space = imgui.GetWindowWidth() / #tabs; local btn_w = imgui.ImVec2(math.floor(btn_space) - 5, 25); local act_bg=IMAGE_WHITE; local act_hov=imgui.ImVec4(.8,.8,.8,1); local act_txt=IMAGE_BLACK; local inact_bg=imgui.GetStyle().Colors[imgui.Col.Button]; local inact_hov=imgui.GetStyle().Colors[imgui.Col.ButtonHovered]; local inact_txt=imgui.GetStyle().Colors[imgui.Col.Text]
+        local tabs = { {1, "Novatos"}, {2, "Online"}, {4, "Informações"}, {9, "Locais"}, {13, "Comandos"}, {11, "Config"} }; local btn_space = imgui.GetWindowWidth() / #tabs; local btn_w = imgui.ImVec2(math.floor(btn_space) - 5, 25); local act_bg=IMAGE_WHITE; local act_hov=imgui.ImVec4(.8,.8,.8,1); local act_txt=IMAGE_BLACK; local inact_bg=imgui.GetStyle().Colors[imgui.Col.Button]; local inact_hov=imgui.GetStyle().Colors[imgui.Col.ButtonHovered]; local inact_txt=imgui.GetStyle().Colors[imgui.Col.Text]
         for i, tab in ipairs(tabs) do local tid, tnm = tab[1], tab[2]; local is_act = state.active_tab == tid; if is_act then imgui.PushStyleColor(imgui.Col.Button,act_bg); imgui.PushStyleColor(imgui.Col.ButtonHovered,act_hov); imgui.PushStyleColor(imgui.Col.ButtonActive,act_hov); imgui.PushStyleColor(imgui.Col.Text,act_txt) else imgui.PushStyleColor(imgui.Col.Button,inact_bg); imgui.PushStyleColor(imgui.Col.ButtonHovered,inact_hov); imgui.PushStyleColor(imgui.Col.ButtonActive,inact_hov); imgui.PushStyleColor(imgui.Col.Text,inact_txt) end; if imgui.Button(tnm, btn_w) then if state.active_tab ~= tid then state.active_tab=tid end end; imgui.PopStyleColor(4); if i < #tabs then imgui.SameLine(0, 2) end end; imgui.Separator(); imgui.Text(string.format("Hora: %s", os.date("%H:%M:%S"))); 
         imgui.SameLine()
         HelpMarker("GUIA RAPIDO DO PAINEL:\n\n[Novatos/Online]\n- Lista jogadores e Staff.\n- Botao Direito no nome: Opcoes (Ir, Espiar, IP, Docs).\n- Filtros: PC/Mobile, Mafia/Honestas.\n\n[Informacoes]\n- Listas de IDs (Veiculos, Skins, Armas).\n- Duplo Clique: Cria veiculo, seta skin ou da arma.\n- Botoes 'Aplicar': Executam a acao no ID alvo.\n\n[Locais]\n- Interiores: Lista de interiores do jogo (Duplo clique para ir).\n- Favoritos: Salve sua posicao atual ou gerencie locais.\n\n[Comandos]\n- Atalhos uteis (/painelevento, /comandosadm).\n- Ferramentas: ESP (Wallhack) e Extrator de IPs.\n\n[Config]\n- Temas, Transparencia e Senha Admin.")
