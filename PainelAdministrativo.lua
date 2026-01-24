@@ -15,8 +15,8 @@ local u8 = function(s) return s and encoding.UTF8(s) or "" end
 
 script_name("PainelInfoHelper")
 script_author("Gerado por ChatGPT - Adaptado por Gemini")
-script_version("1.0.48")
-script_version_number(1048)
+script_version("1.0.49")
+script_version_number(1049)
 
 -- VARIAVEIS DO ADMIN ESP (INTEGRACAO)
 local esp_active = false
@@ -807,7 +807,7 @@ function apply_theme(theme_name)
 end
 
 -- SISTEMA DE ATUALIZACAO AUTOMATICA (GITHUB)
-local script_url = "https://github.com/cvradmin/paineladmincvr/raw/refs/heads/main/PainelAdministrativo.lua"
+local script_url = "https://raw.githubusercontent.com/cvradmin/paineladmincvr/main/PainelAdministrativo.lua"
 
 function check_update(notify_no_update)
     local dlstatus = require('moonloader').download_status
@@ -815,36 +815,22 @@ function check_update(notify_no_update)
     
     if notify_no_update then sampAddChatMessage("[PainelInfoHelper] Verificando atualizacoes...", -1) end
 
-    downloadUrlToFile(script_url, temp_path, function(id, status, p1, p2)
+    downloadUrlToFile(script_url .. "?t=" .. os.time(), temp_path, function(id, status, p1, p2)
         if status == dlstatus.STATUS_ENDDOWNLOADDATA then
             local f = io.open(temp_path, 'r')
             if f then
                 local content = f:read('*a')
                 f:close()
+                os.remove(temp_path)
                 
                 local remote_ver = tonumber(content:match("script_version_number%((%d+)%)"))
                 local local_ver = thisScript().version_number or 0
                 
                 if remote_ver and remote_ver > local_ver then
-                    sampAddChatMessage("[PainelInfoHelper] Nova versao encontrada: v" .. remote_ver, 0xFFFF00)
-                    sampAddChatMessage("[PainelInfoHelper] Atualizando automaticamente...", 0xFFFF00)
-                    
-                    local f_curr = io.open(thisScript().path, "wb")
-                    if f_curr then
-                        f_curr:write(content)
-                        f_curr:close()
-                        os.remove(temp_path)
-                        sampAddChatMessage("[PainelInfoHelper] Atualizacao concluida! Recarregando script...", 0x00FF00)
-                        thisScript():reload()
-                    else
-                        sampAddChatMessage("[PainelInfoHelper] Erro ao gravar atualizacao (Arquivo em uso).", 0xFF0000)
-                        os.remove(temp_path)
-                    end
-                else
-                    os.remove(temp_path)
-                    if notify_no_update then
+                    sampAddChatMessage("[PainelInfoHelper] Nova versao disponivel: v" .. remote_ver, 0xFFFF00)
+                    sampAddChatMessage("[PainelInfoHelper] Acesse o GitHub para baixar a atualizacao.", 0xFFFF00)
+                elseif notify_no_update then
                         sampAddChatMessage("[PainelInfoHelper] Voce ja esta usando a versao mais recente.", 0x00FF00)
-                    end
                 end
             end
         end
@@ -898,7 +884,7 @@ function imgui.OnDrawFrame()
     if state.window_open.v then
         local sw, sh = getScreenResolution(); imgui.SetNextWindowPos(imgui.ImVec2(sw / 2, sh / 2), imgui.Cond.FirstUseEver, imgui.ImVec2(0.5, 0.5)); imgui.SetNextWindowSize(imgui.ImVec2(700, 500), imgui.Cond.FirstUseEver)
         
-        imgui.Begin("Painel Helper [F12] - v1.0.47", state.window_open)
+        imgui.Begin("Painel Helper [F12] - v1.0.49", state.window_open)
 
         local tabs = { {1, "Novatos"}, {2, "Online"}, {4, "Informacoes"}, {9, "Locais"}, {13, "Comandos"}, {11, "Config"} }; local btn_space = imgui.GetWindowWidth() / #tabs; local btn_w = imgui.ImVec2(math.floor(btn_space) - 5, 25); local act_bg=IMAGE_WHITE; local act_hov=imgui.ImVec4(.8,.8,.8,1); local act_txt=IMAGE_BLACK; local inact_bg=imgui.GetStyle().Colors[imgui.Col.Button]; local inact_hov=imgui.GetStyle().Colors[imgui.Col.ButtonHovered]; local inact_txt=imgui.GetStyle().Colors[imgui.Col.Text]
         for i, tab in ipairs(tabs) do local tid, tnm = tab[1], tab[2]; local is_act = state.active_tab == tid; if is_act then imgui.PushStyleColor(imgui.Col.Button,act_bg); imgui.PushStyleColor(imgui.Col.ButtonHovered,act_hov); imgui.PushStyleColor(imgui.Col.ButtonActive,act_hov); imgui.PushStyleColor(imgui.Col.Text,act_txt) else imgui.PushStyleColor(imgui.Col.Button,inact_bg); imgui.PushStyleColor(imgui.Col.ButtonHovered,inact_hov); imgui.PushStyleColor(imgui.Col.ButtonActive,inact_hov); imgui.PushStyleColor(imgui.Col.Text,inact_txt) end; if imgui.Button(tnm, btn_w) then if state.active_tab ~= tid then state.active_tab=tid end end; imgui.PopStyleColor(4); if i < #tabs then imgui.SameLine(0, 2) end end; imgui.Separator(); imgui.Text(string.format("Atualizacao: %s", os.date("%H:%M:%S"))); imgui.Spacing()
