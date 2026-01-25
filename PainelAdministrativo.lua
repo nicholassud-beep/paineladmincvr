@@ -15,8 +15,8 @@ local u8 = function(s) return s and encoding.UTF8(s) or "" end
 
 script_name("PainelInfoHelper")
 script_author("Gerado por ChatGPT - Adaptado por Gemini")
-script_version("1.0.62")
-local script_ver_num = 1062
+script_version("1.0.66")
+local script_ver_num = 1066
 script_version_number(script_ver_num)
 
 -- VARIAVEIS DO ADMIN ESP (INTEGRACAO)
@@ -55,6 +55,7 @@ local state = {
     ip_extractor_check_dupes = imgui.ImBool(false),
     extracted_ips = {},
     ip_req_queue = {},
+    player_ips = {}, -- Armazena IPs capturados: [id] = {ip="...", nick="..."}
     device_scanner_active = false,
     current_scan_info = nil, -- {id=..., name=...}
     scan_response_received = false,
@@ -298,7 +299,7 @@ local function convert_samp_color(argb)
 end
 
 local function draw_player_header()
-    local idw=35; local nickw=150; local profw=180; local lvlw=40
+    local idw=35; local nickw=130; local profw=150; local lvlw=40; local pingw=110
     local st="|"; local sw=imgui.CalcTextSize(st).x; local sp=imgui.GetStyle().ItemSpacing.x; local sc=imgui.GetStyle().Colors[imgui.Col.Separator]
     local p1s=idw; local p2ns=p1s+sw+sp; local p2s=p2ns+nickw
     local align_offset = imgui.GetStyle().FramePadding.x
@@ -308,6 +309,7 @@ local function draw_player_header()
     local p4ls=p3s+sw+sp
     imgui.SameLine(p3s); imgui.TextColored(sc,st); imgui.SameLine(p4ls); imgui.Text("Nivel")
     local p4s=p4ls+lvlw; local p5ps=p4s+sw+sp; imgui.SameLine(p4s); imgui.TextColored(sc,st); imgui.SameLine(p5ps); imgui.Text("Ping")
+    local p5s=p5ps+pingw; local p6is=p5s+sw+sp; imgui.SameLine(p5s); imgui.TextColored(sc,st); imgui.SameLine(p6is); imgui.Text("IP")
     imgui.Separator()
 end
 
@@ -574,6 +576,7 @@ function sampev.onServerMessage(color, text)
                 local info = table.remove(state.ip_req_queue, 1)
                 if info then
                     p_info = info
+                    state.player_ips[info.id] = {ip = ip, nick = info.name} -- Salva o IP na lista
                     log_text = string.format("Nick: %s (ID: %d) | %s", info.name, info.id, text)
                 end
             end
@@ -927,7 +930,7 @@ function imgui.OnDrawFrame()
     if state.window_open.v then
         local sw, sh = getScreenResolution(); imgui.SetNextWindowPos(imgui.ImVec2(sw / 2, sh / 2), imgui.Cond.FirstUseEver, imgui.ImVec2(0.5, 0.5)); imgui.SetNextWindowSize(imgui.ImVec2(700, 500), imgui.Cond.FirstUseEver)
         
-        imgui.Begin("Painel Helper [F12] - v1.0.62", state.window_open)
+        imgui.Begin("Painel Helper [F12] - v1.0.65", state.window_open)
 
         local tabs = { {1, "Novatos"}, {2, "Online"}, {4, "Informacoes"}, {9, "Locais"}, {13, "Comandos"}, {11, "Config"} }; local btn_space = imgui.GetWindowWidth() / #tabs; local btn_w = imgui.ImVec2(math.floor(btn_space) - 5, 25); local act_bg=IMAGE_WHITE; local act_hov=imgui.ImVec4(.8,.8,.8,1); local act_txt=IMAGE_BLACK; local inact_bg=imgui.GetStyle().Colors[imgui.Col.Button]; local inact_hov=imgui.GetStyle().Colors[imgui.Col.ButtonHovered]; local inact_txt=imgui.GetStyle().Colors[imgui.Col.Text]
         for i, tab in ipairs(tabs) do local tid, tnm = tab[1], tab[2]; local is_act = state.active_tab == tid; if is_act then imgui.PushStyleColor(imgui.Col.Button,act_bg); imgui.PushStyleColor(imgui.Col.ButtonHovered,act_hov); imgui.PushStyleColor(imgui.Col.ButtonActive,act_hov); imgui.PushStyleColor(imgui.Col.Text,act_txt) else imgui.PushStyleColor(imgui.Col.Button,inact_bg); imgui.PushStyleColor(imgui.Col.ButtonHovered,inact_hov); imgui.PushStyleColor(imgui.Col.ButtonActive,inact_hov); imgui.PushStyleColor(imgui.Col.Text,inact_txt) end; if imgui.Button(tnm, btn_w) then if state.active_tab ~= tid then state.active_tab=tid end end; imgui.PopStyleColor(4); if i < #tabs then imgui.SameLine(0, 2) end end; imgui.Separator(); imgui.Text(string.format("Atualizacao: %s", os.date("%H:%M:%S"))); imgui.Spacing()
@@ -1076,7 +1079,7 @@ function imgui.OnDrawFrame()
             imgui.Separator(); imgui.BeginChild("plist_child",imgui.ImVec2(0,0),true)
             
             local function render_list(list)
-                local idw=35; local nickw=150; local profw=180; local lvlw=40
+                local idw=35; local nickw=130; local profw=150; local lvlw=40; local pingw=110
                 local sc=imgui.GetStyle().Colors[imgui.Col.Separator]; local st="|"; local sw=imgui.CalcTextSize(st).x; local sp=imgui.GetStyle().ItemSpacing.x
                 local align_offset = imgui.GetStyle().FramePadding.x
                 for _,p in ipairs(list) do
@@ -1084,15 +1087,29 @@ function imgui.OnDrawFrame()
                     local curX = imgui.GetCursorPosX()
                     local line_lbl=string.format("##p_%d",p.id)
                     imgui.Selectable(line_lbl, false, 0, imgui.ImVec2(0, imgui.GetTextLineHeight()))
-                    if imgui.BeginPopupContextItem("p_act"..p.id) then if imgui.MenuItem("CP Nick") then imgui.SetClipboardText(u8(p.nick)); sampAddChatMessage("Nick CP",0) end; if p.profession then if imgui.MenuItem("CP Info") then imgui.SetClipboardText(u8(p.profession)); sampAddChatMessage("Info CP",0) end end; imgui.Separator(); if imgui.MenuItem("Ir ID") then sampSendChat("/ir "..p.id); state.window_open.v=false; imgui.Process=false end; if imgui.MenuItem("Espiar ID") then sampSendChat("/espiar "..p.id); state.window_open.v=false; imgui.Process=false end; imgui.EndPopup() end
+                    if imgui.BeginPopupContextItem("p_act"..p.id) then 
+                        if imgui.MenuItem("CP Nick") then imgui.SetClipboardText(u8(p.nick)); sampAddChatMessage("Nick CP",0) end; 
+                        if p.profession then if imgui.MenuItem("CP Info") then imgui.SetClipboardText(u8(p.profession)); sampAddChatMessage("Info CP",0) end end; 
+                        local ip_data = state.player_ips[p.id]
+                        if ip_data and ip_data.nick == p.nick then if imgui.MenuItem("Copiar IP") then imgui.SetClipboardText(ip_data.ip); sampAddChatMessage("[PI] IP copiado: " .. ip_data.ip, -1) end end
+                        imgui.Separator(); 
+                        if imgui.MenuItem("Ir ID") then sampSendChat("/ir "..p.id); state.window_open.v=false; imgui.Process=false end; 
+                        if imgui.MenuItem("Espiar ID") then sampSendChat("/espiar "..p.id); state.window_open.v=false; imgui.Process=false end; 
+                        imgui.EndPopup() 
+                    end
                     
-                    local p1s=idw; local p2ns=p1s+sw+sp; local p2s=p2ns+nickw; local p3ps=p2s+sw+sp; local p3s=p3ps+profw; local p4ls=p3s+sw+sp; local p4s=p4ls+lvlw; local p5ps=p4s+sw+sp
+                    local p1s=idw; local p2ns=p1s+sw+sp; local p2s=p2ns+nickw; local p3ps=p2s+sw+sp; local p3s=p3ps+profw; local p4ls=p3s+sw+sp; local p4s=p4ls+lvlw; local p5ps=p4s+sw+sp; local p5s=p5ps+pingw; local p6is=p5s+sw+sp
                     imgui.SameLine(curX + align_offset); imgui.TextColored(p.color,tostring(p.id))
                     imgui.SameLine(p1s); imgui.TextColored(sc,st); imgui.SameLine(p2ns); imgui.TextColored(p.color,u8(p.nick))
                     imgui.SameLine(p2s); imgui.TextColored(sc,st); imgui.SameLine(p3ps); local tc=paused and IMAGE_GREY or p.color; imgui.TextColored(tc,u8(disp_p))
                     imgui.SameLine(p3s); imgui.TextColored(sc,st); imgui.SameLine(p4ls); imgui.TextColored(p.color,tostring(p.Level))
                     imgui.SameLine(p4s); imgui.TextColored(sc,st); imgui.SameLine(p5ps); local pc=(p.Ping<100) and IMAGE_GREEN or (p.Ping<=200 and IMAGE_YELLOW or IMAGE_RED); 
                     local dev_str = state.player_devices[p.id] and (" ["..state.player_devices[p.id].."]") or ""; imgui.TextColored(pc,tostring(p.Ping).." ms"..dev_str)
+                    
+                    imgui.SameLine(p5s); imgui.TextColored(sc,st); imgui.SameLine(p6is); 
+                    local ip_data = state.player_ips[p.id]
+                    local ip_str = (ip_data and ip_data.nick == p.nick) and ip_data.ip or "-"
+                    imgui.TextDisabled(ip_str)
                 end
             end
             
