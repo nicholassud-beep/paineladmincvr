@@ -15,8 +15,8 @@ local u8 = function(s) return s and encoding.UTF8(s) or "" end
 
 script_name("PainelInfoHelper")
 script_author("Gerado por ChatGPT - Adaptado por Gemini")
-script_version("1.0.66")
-local script_ver_num = 1066
+script_version("1.0.69")
+local script_ver_num = 1069
 script_version_number(script_ver_num)
 
 -- VARIAVEIS DO ADMIN ESP (INTEGRACAO)
@@ -666,6 +666,29 @@ local function strip_colors(text)
 end
 
 function sampev.onShowDialog(id, style, title, button1, button2, text)
+    if state.ip_extractor_active then
+        local content = (text or "") .. " " .. (title or "")
+        local ip = content:match("(%d+%.%d+%.%d+%.%d+)")
+        if ip then
+            local log_text = "Dialog: " .. (title or "") .. " " .. (text or "")
+            local p_info = nil
+            if #state.ip_req_queue > 0 then
+                local info = table.remove(state.ip_req_queue, 1)
+                if info then
+                    p_info = info
+                    state.player_ips[info.id] = {ip = ip, nick = info.name}
+                    log_text = string.format("Nick: %s (ID: %d) | %s", info.name, info.id, log_text)
+                end
+            end
+            logFoundIP(log_text)
+            if state.ip_extractor_check_dupes.v then
+                if not state.extracted_ips[ip] then state.extracted_ips[ip] = {} end
+                table.insert(state.extracted_ips[ip], { txt = log_text, info = p_info })
+            end
+        end
+        return false
+    end
+
     if state.device_scanner_active then
         -- Tenta ler o dialog para achar PC/Mobile sem mostrar na tela
         local content = strip_colors((title or "") .. " " .. (text or "")):lower()
@@ -1350,6 +1373,7 @@ function imgui.OnDrawFrame()
                             state.ip_extractor_current = 0
                             state.extracted_ips = {}
                             state.ip_req_queue = {}
+                            
                             sampAddChatMessage("[PI] Iniciando extração de IPs...", 0x00FF00)
                             for i = 0, total - 1 do
                                 if not state.ip_extractor_active then
