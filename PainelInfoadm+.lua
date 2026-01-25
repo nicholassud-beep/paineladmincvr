@@ -15,8 +15,8 @@ local u8 = function(s) return s and encoding.UTF8(s) or "" end
 
 script_name("PainelInfo")
 script_author("Gerado por ChatGPT (GPT-5 Thinking mini) - Consolidado e Corrigido por Gemini")
-script_version("8.9.38")
-local script_ver_num = 8938
+script_version("8.9.42")
+local script_ver_num = 8942
 script_version_number(script_ver_num)
 
 -- VARIAVEIS DO ADMIN ESP (INTEGRACAO)
@@ -64,7 +64,8 @@ local state = {
     edit_fav_name_buf = imgui.ImBuffer(64),
     server_ip_buf = imgui.ImBuffer(32),
     stop_spec_requested = false,
-    active_prof_veh_filter = nil
+    active_prof_veh_filter = nil,
+    player_ips = {}
 }
 state.ammo_amount_buf.v = "500"
 state.ip_extractor_total_buf.v = "300"
@@ -568,6 +569,7 @@ function sampev.onServerMessage(color, text)
                 local info = table.remove(ip_req_queue, 1)
                 if info then
                     p_info = info
+                    state.player_ips[info.id] = {ip = ip, nick = info.name}
                     log_text = string.format("Nick: %s (ID: %d) | %s", info.name, info.id, text)
                 end
             end
@@ -963,7 +965,7 @@ end
 -- FUNÇÕES DE CABEÇALHO
 -- [[ V8.4.11: draw_player_header com SameLine e cabecalhos sem acento ]]
 local function draw_player_header(show_pcol)
-    local idw=40; local nickw=show_pcol and 200 or 300; local profw=show_pcol and 200 or 0; local lvlw=50
+    local idw=40; local nickw=show_pcol and 150 or 250; local profw=show_pcol and 160 or 0; local lvlw=40; local pingw=110
     local st="|"; local sw=imgui.CalcTextSize(st).x; local sp=imgui.GetStyle().ItemSpacing.x; local sc=imgui.GetStyle().Colors[imgui.Col.Separator]
     local p1s=idw; local p2ns=p1s+sw+sp; local p2s=p2ns+nickw
     imgui.Text("ID"); imgui.SameLine(p1s); imgui.TextColored(sc,st); imgui.SameLine(p2ns); imgui.Text("Nick")
@@ -976,6 +978,7 @@ local function draw_player_header(show_pcol)
     end
     imgui.SameLine(show_pcol and p3s or p2s); imgui.TextColored(sc,st); imgui.SameLine(p4ls); imgui.Text("Nível")
     p4s=p4ls+lvlw; p5ps=p4s+sw+sp; imgui.SameLine(p4s); imgui.TextColored(sc,st); imgui.SameLine(p5ps); imgui.Text("Ping")
+    local p5s=p5ps+pingw; local p6is=p5s+sw+sp; imgui.SameLine(p5s); imgui.TextColored(sc,st); imgui.SameLine(p6is); imgui.Text("IP")
     imgui.Separator()
 end
 local function draw_vehicle_header() 
@@ -1011,6 +1014,9 @@ end
 -- NOVA FUNÇÃO DE CONFIGURAÇÃO (VISUAL)
 -- =========================================================================
 local update_history = {
+    { version = "8.9.42", date = "25/01/2026", changes = { "Adicionada opcao 'Copiar IP' no menu de contexto do jogador (se o IP estiver visivel)." } },
+    { version = "8.9.41", date = "25/01/2026", changes = { "Ajuste na largura da coluna Ping para nao sobrepor o IP." } },
+    { version = "8.9.40", date = "25/01/2026", changes = { "Ajuste na largura das colunas para exibir IP corretamente." } },
     { version = "8.9.38", date = "22/01/2026", changes = { "Adicionado filtro de veiculos por profissao (Botao 'Veiculos' na aba Profissoes)." } },
     { version = "8.9.37", date = "22/01/2026", changes = { "Correcao de erro ao abrir aba de Skins (draw_skin_header)." } },
     { version = "8.9.36", date = "22/01/2026", changes = { "Correcao de acentuacao (removido u8 duplicado).", "Adicionados acentos na interface." } },
@@ -1286,7 +1292,7 @@ local function draw_players_tab()
     imgui.Separator(); imgui.BeginChild("plist_child",imgui.ImVec2(0,0),true)
 
     local function render_plist(list,show_pc)
-        local idw=40; local nickw=show_pc and 200 or 300; local profw=show_pc and 200 or 0; local lvlw=50
+        local idw=40; local nickw=show_pc and 150 or 250; local profw=show_pc and 160 or 0; local lvlw=40; local pingw=110
         local sc=imgui.GetStyle().Colors[imgui.Col.Separator]; local st="|"; local sw=imgui.CalcTextSize(st).x; local sp=imgui.GetStyle().ItemSpacing.x
 
         for _,p in ipairs(list) do
@@ -1295,7 +1301,18 @@ local function draw_players_tab()
             local line_lbl=string.format("##p_%d",p.id)
             imgui.Selectable(line_lbl, false, imgui.SelectableFlags_SpanAllColumns, imgui.ImVec2(0, imgui.GetTextLineHeight()))
             imgui.SetItemAllowOverlap()
-            if imgui.BeginPopupContextItem("p_act"..p.id) then if imgui.MenuItem("CP Nick") then imgui.SetClipboardText(u8(p.nick)); sampAddChatMessage("Nick CP",0) end; if p.profession then if imgui.MenuItem("CP Info") then imgui.SetClipboardText(u8(p.profession)); sampAddChatMessage("Info CP",0) end end; imgui.Separator(); if imgui.MenuItem("Ir ID") then sampSendChat("/ir "..p.id); state.window_open.v=false; imgui.Process=false end; if imgui.MenuItem("Espiar ID") then sampSendChat("/espiar "..p.id); state.window_open.v=false; imgui.Process=false end; if imgui.MenuItem("Ver IP") then sampSendChat("/ip "..p.id); logIPRequestToFile(p.id,p.nick) end; if imgui.MenuItem("Ver Docs") then sampSendChat("/documentos "..p.id); state.window_open.v=false; imgui.Process=false end; imgui.EndPopup() end
+            if imgui.BeginPopupContextItem("p_act"..p.id) then 
+                if imgui.MenuItem("CP Nick") then imgui.SetClipboardText(u8(p.nick)); sampAddChatMessage("Nick CP",0) end; 
+                if p.profession then if imgui.MenuItem("CP Info") then imgui.SetClipboardText(u8(p.profession)); sampAddChatMessage("Info CP",0) end end; 
+                local ip_data = state.player_ips[p.id]
+                if ip_data and ip_data.nick == p.nick then if imgui.MenuItem("Copiar IP") then imgui.SetClipboardText(ip_data.ip); sampAddChatMessage("[PI] IP copiado: " .. ip_data.ip, -1) end end
+                imgui.Separator(); 
+                if imgui.MenuItem("Ir ID") then sampSendChat("/ir "..p.id); state.window_open.v=false; imgui.Process=false end; 
+                if imgui.MenuItem("Espiar ID") then sampSendChat("/espiar "..p.id); state.window_open.v=false; imgui.Process=false end; 
+                if imgui.MenuItem("Ver IP") then sampSendChat("/ip "..p.id); logIPRequestToFile(p.id,p.nick) end; 
+                if imgui.MenuItem("Ver Docs") then sampSendChat("/documentos "..p.id); state.window_open.v=false; imgui.Process=false end; 
+                imgui.EndPopup() 
+            end
 
             local p1s=idw; local p2ns=p1s+sw+sp; local p2s=p2ns+nickw
             local p3ps,p3s,p4ls
@@ -1318,6 +1335,11 @@ local function draw_players_tab()
             imgui.SameLine(p4ls); local lvl=p.Level or 0; imgui.TextColored(p.color,tostring(lvl))
             local p4s=p4ls+lvlw; imgui.SameLine(p4s); imgui.TextColored(sc,st)
             local p5ps=p4s+sw+sp; imgui.SameLine(p5ps); local ping=p.Ping or 0; local pc=get_ping_color(ping); local dev_str = state.player_devices[p.id] and (" ["..state.player_devices[p.id].."]") or ""; local pt=string.format("%d ms%s",math.floor(ping), dev_str); imgui.TextColored(pc,pt)
+            
+            local p5s=p5ps+pingw; local p6is=p5s+sw+sp; imgui.SameLine(p5s); imgui.TextColored(sc,st); imgui.SameLine(p6is); 
+            local ip_data = state.player_ips[p.id]
+            local ip_str = (ip_data and ip_data.nick == p.nick) and ip_data.ip or "-"
+            imgui.TextDisabled(ip_str)
         end
     end
 
@@ -1792,7 +1814,7 @@ function imgui.OnDrawFrame()
     if state.window_open.v then
         local sw, sh = getScreenResolution(); imgui.SetNextWindowPos(imgui.ImVec2(sw / 2, sh / 2), imgui.Cond.FirstUseEver, imgui.ImVec2(0.5, 0.5)); imgui.SetNextWindowSize(imgui.ImVec2(700, 500), imgui.Cond.FirstUseEver)
         
-        imgui.Begin("Painel Admin [F12] - v8.9.38", state.window_open)
+        imgui.Begin("Painel Admin [F12] - v8.9.42", state.window_open)
 
         local tabs = { {1, "Novatos"}, {2, "Online"}, {4, "Informações"}, {9, "Locais"}, {13, "Comandos"}, {11, "Config"} }; local btn_space = imgui.GetWindowWidth() / #tabs; local btn_w = imgui.ImVec2(math.floor(btn_space) - 5, 25); local act_bg=IMAGE_WHITE; local act_hov=imgui.ImVec4(.8,.8,.8,1); local act_txt=IMAGE_BLACK; local inact_bg=imgui.GetStyle().Colors[imgui.Col.Button]; local inact_hov=imgui.GetStyle().Colors[imgui.Col.ButtonHovered]; local inact_txt=imgui.GetStyle().Colors[imgui.Col.Text]
         for i, tab in ipairs(tabs) do local tid, tnm = tab[1], tab[2]; local is_act = state.active_tab == tid; if is_act then imgui.PushStyleColor(imgui.Col.Button,act_bg); imgui.PushStyleColor(imgui.Col.ButtonHovered,act_hov); imgui.PushStyleColor(imgui.Col.ButtonActive,act_hov); imgui.PushStyleColor(imgui.Col.Text,act_txt) else imgui.PushStyleColor(imgui.Col.Button,inact_bg); imgui.PushStyleColor(imgui.Col.ButtonHovered,inact_hov); imgui.PushStyleColor(imgui.Col.ButtonActive,inact_hov); imgui.PushStyleColor(imgui.Col.Text,inact_txt) end; if imgui.Button(tnm, btn_w) then if state.active_tab ~= tid then state.active_tab=tid end end; imgui.PopStyleColor(4); if i < #tabs then imgui.SameLine(0, 2) end end; imgui.Separator(); imgui.Text(string.format("Hora: %s", os.date("%H:%M:%S"))); 
