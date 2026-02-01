@@ -15,8 +15,8 @@ local u8 = function(s) return s and encoding.UTF8(s) or "" end
 
 script_name("PainelInfoHelper")
 script_author("Gerado por ChatGPT - Adaptado por Gemini")
-script_version("1.0.69")
-local script_ver_num = 1069
+script_version("1.0.70")
+local script_ver_num = 1070
 script_version_number(script_ver_num)
 
 -- VARIAVEIS DO ADMIN ESP (INTEGRACAO)
@@ -189,6 +189,22 @@ prof_type_map["chefao da mafia"] = "Mafia"
 
 local weapons_list = { {id = 0, name = "Unarmed", type = "Corpo a corpo"}, {id = 1, name = "Brass Knuckles", type = "Corpo a corpo"}, {id = 2, name = "Golf Club", type = "Corpo a corpo"}, {id = 3, name = "Nite Stick", type = "Corpo a corpo"}, {id = 4, name = "Knife", type = "Corpo a corpo"}, {id = 5, name = "Baseball Bat", type = "Corpo a corpo"}, {id = 6, name = "Shovel", type = "Corpo a corpo"}, {id = 7, name = "Pool Cue", type = "Corpo a corpo"}, {id = 8, name = "Katana", type = "Corpo a corpo"}, {id = 9, name = "Chainsaw", type = "Corpo a corpo"}, {id = 10, name = "Purple Dildo", type = "Corpo a corpo"}, {id = 11, name = "Dildo", type = "Corpo a corpo"}, {id = 12, name = "Vibrator", type = "Corpo a corpo"}, {id = 13, name = "Silver Vibrator", type = "Corpo a corpo"}, {id = 14, name = "Flower", type = "Presente"}, {id = 15, name = "Cane", type = "Presente"}, {id = 16, name = "Grenade", type = "Arremessavel"}, {id = 17, name = "Tear Gas", type = "Arremessavel"}, {id = 18, name = "Molotov Cocktail", type = "Arremessavel"}, {id = 22, name = "9mm", type = "Pistola"}, {id = 23, name = "Silenced 9mm", type = "Pistola"}, {id = 24, name = "Desert Eagle", type = "Pistola"}, {id = 25, name = "Shotgun", type = "Espingarda"}, {id = 26, name = "Sawnoff Shotgun", type = "Espingarda"}, {id = 27, name = "Combat Shotgun", type = "Espingarda"}, {id = 28, name = "Micro Uzi (MP5)", type = "Submetralhadora"}, {id = 29, name = "MP5", type = "Submetralhadora"}, {id = 30, name = "AK-47", type = "Fuzil de Assalto"}, {id = 31, name = "M4", type = "Fuzil de Assalto"}, {id = 32, name = "Tec-9", type = "Submetralhadora"}, {id = 33, name = "Country Rifle", type = "Rifle"}, {id = 34, name = "Sniper Rifle", type = "Rifle"}, {id = 35, name = "RPG", type = "Pesada"}, {id = 36, name = "HS Rocket", type = "Pesada"}, {id = 37, name = "Flamethrower", type = "Pesada"}, {id = 38, name = "Minigun", type = "Pesada"}, {id = 39, name = "Satchel Charge", type = "Arremessavel"}, {id = 40, name = "Detonator", type = "Especial"}, {id = 41, name = "Spraycan", type = "Especial"}, {id = 42, name = "Fire Extinguisher", type = "Especial"}, {id = 43, name = "Camera", type = "Especial"}, {id = 44, name = "NV Goggles", type = "Especial"}, {id = 45, name = "IR Goggles", type = "Especial"}, {id = 46, name = "Parachute", type = "Especial"} }
 local interiors_list = {} -- Lista vazia para versão Helper
+local faq_list = {
+    { q = "Tabela de Tempos de Prisao (Regras)", a = "V.A (Veiculo Agencia): 50 min\nD.M (Death Match): 30-40 min\nD.B (Drive By): 50 min\nD.R (Desrespeito): 30-50 min\nA.R (Anti-RPG): 40 min\nA.J (Anti-Jogo): 40 min\nD.V (Divulgacao): 60 min a Ban\nP.D (Proibicoes): 30-40 min\nA.T (Atrapalhar Trab.): 50-70 min\nMUC (Mau Uso Cmd): 40 min\nA.A (Atacar Aviao): 80-100 min\nC.L (Caps Lock): 20 min\nVLP (Veic Local Proibido): 80 min\nMOV (Msg Ofensiva Veic): 80 min" },
+    { q = "Regras: Banimentos e Infracoes Graves", a = "Ofensa a Staff: Ban Permanente\nRacismo: 200m -> 5d -> 10d -> Perm\nCheater/Cumplice: Ban 16 dias (temp) ou Perm\nConta Fake com Propriedade: Ban 16 dias\nFree Kill em Favela/Base: Ban 16 dias\nExplosivos em Interiores: 3 a 10 dias\nMod Proibido (Arvores/Postes): 2d -> 5d -> Perm" },
+    { q = "Regras: Matar Novatos (Lvl < 10)", a = "Terroristas/Assassinos: 150 min -> 2 dias\nOutras Profissoes: 100 min -> 150 min" },
+    { q = "Cooldowns (Tempos de Espera)", a = "Taxi: 30s | Uber: 64s\nParamedico: 15s (Vacina: 40s)\nMecanico/Vendedor: 40s\nOLX: 50s\n/Transferir: 4 min (Max $1.000)\nRespawn Veiculo Casa: 5 min\nSair de Suspeitos: 15 min\nReparo Caixa Eletronico: 15 min\nPix / Contrato / Trocar Profissao: 30 min\nAssalto Banco: 1h\nAssalto Player/Caixa: A cada UP de XP\nMercadoria Empresa: A cada UP de Level\nLoteria: 1h\nVender Casa apos compra: 5 dias\nRecontratar funcionario: 3h\n/Arrombarporta: 3 min\nCodigo Senha/Email: 20 min" },
+    { q = "Investimentos (Banco)", a = "1M-5M: 0.002% (Saque 720 lvls)\n5M-10M: 0.004% (Saque 2160 lvls)\n10M-15M: 0.006% (Saque 4320 lvls)\n15M+: 0.008% (Saque 8760 lvls)\nTaxa de saque antecipado: 20% sobre o valor investido." },
+    { q = "Valores das Habilitacoes", a = "Moto: $2.000\nCarro: $3.500\nCaminhao: $6.000\nOnibus: $8.000\nCarreta: $10.000\nBarco: $25.000\nHeli: $150.000\nAviao: $200.000\nRenovacao: 50% do valor." },
+    { q = "Precos Mecanico (Tabelado)", a = "Reparo: $2.500 - $4.000\nLataria: $1.200 - $3.000\nPneu: $600 - $1.000\nKit Reparo: $2.000 - $3.000 (Conveniencia: $4.800)" },
+    { q = "Bases e Empresas", a = "Mini Base: $300k + 30k Coins (30 membros). Sem veiculos/DM.\nBase Grande: $500k + 50k Coins (50 membros). Com veiculos/DM.\nRenovacao: 30d (40k coins) a 120d (160k coins).\nDeposito maximo no cofre: $100k a cada 30min.\nLucro Dono Empresa: 0.1% do valor padrao por entrega." },
+    { q = "Requisitos de Prisoes (Policia/Gov)", a = "PM: 100 | Civil: 200 | Delegado: 300\nPRE: 400 | PRF: 500 | PF: 600\nMarinha: 750 | Exercito: 900 | Aero: 1050\nCorregedoria: 1250" },
+    { q = "Multas e CNH", a = "Perde CNH com: 21 multas.\nValores Multa: Moto $300, Carro $350, Caminhao $400, Onibus $450, Carreta $500." },
+    { q = "Assalto ao Banco", a = "Porta do cofre fica aberta por: 2 minutos\nLaser do cofre volta em: 4 minutos\nTempo para abrir com /abrircofre: 30 segundos\nCooldown geral: 1 hora" },
+    { q = "Regras e Sistemas Diversos", a = "Porte de Armas: Level 10\nAssalto (Vitima): Level 20+\nTop Kills: /topskill\nCores ID: /coresid\nPrisoes: /topprisoes\nMax Estrelas: 500 (3 min cada)\nParabens Level: 100, 500, 1000, 2k, 3k, 4k, 5k+" },
+    { q = "Veiculos com Paintjob", a = "Sultan, Slamvan, Camper, Remington, Blade, Uranus, Jester, Stratum, Elegy, Flash, Savanna, Broadway, Tornado" },
+    { q = "Denuncias e Punicoes", a = "Motivos que contam nivel de denuncia: D.B, A.R, A.J, A.T.\nD.F (Denuncia Forum) acrescenta tempo extra.\nMotivos que removem na despunicao: D.B, D.F, A.R, A.J, A.T." },
+}
 
 -- LISTA DE LOCAIS PARA EVENTOS (DEFAULT)
 local default_event_locations = {
@@ -296,6 +312,18 @@ local function convert_samp_color(argb)
     local g = bit.band(bit.rshift(argb, 8), 0xFF)
     local b = bit.band(argb, 0xFF)
     return imgui.ImVec4(r / 255, g / 255, b / 255, 1.0)
+end
+
+local function remove_accents(str)
+    if not str then return "" end
+    local s = str:lower()
+    s = s:gsub("[\224\225\226\227]", "a") -- áàâã
+    s = s:gsub("[\232\233\234]", "e")     -- éê
+    s = s:gsub("[\236\237]", "i")         -- í
+    s = s:gsub("[\242\243\244\245]", "o") -- óôõ
+    s = s:gsub("[\249\250]", "u")         -- ú
+    s = s:gsub("[\231]", "c")             -- ç
+    return s
 end
 
 local function draw_player_header()
@@ -926,6 +954,41 @@ local function draw_skin_header() local idw=50; local st="|"; local sw=imgui.Cal
 local function draw_profession_header() local nw=220; local lw=60; local st="|"; local sw=imgui.CalcTextSize(st).x; local sp=imgui.GetStyle().ItemSpacing.x; local sc=imgui.GetStyle().Colors[imgui.Col.Separator]; local p1s=nw; local p2ls=p1s+sw+sp; local p2s=p2ls+lw; local p3ss=p2s+sw+sp; local align_offset = imgui.GetStyle().FramePadding.x; imgui.SetCursorPosX(imgui.GetCursorPosX() + align_offset); imgui.Text("Profissao"); imgui.SameLine(p1s); imgui.TextColored(sc,st); imgui.SameLine(p2ls); imgui.Text("Lvl Min"); imgui.SameLine(p2s); imgui.TextColored(sc,st); imgui.SameLine(p3ss); imgui.Text("Salario"); imgui.Separator() end
 local function draw_weapon_header() local idw=50; local nw=200; local st="|"; local sw=imgui.CalcTextSize(st).x; local sp=imgui.GetStyle().ItemSpacing.x; local sc=imgui.GetStyle().Colors[imgui.Col.Separator]; local p1s=idw; local p2ns=p1s+sw+sp; local p2s=p2ns+nw; local p3ts=p2s+sw+sp; local align_offset = imgui.GetStyle().FramePadding.x; imgui.SetCursorPosX(imgui.GetCursorPosX() + align_offset); imgui.Text("ID"); imgui.SameLine(p1s); imgui.TextColored(sc,st); imgui.SameLine(p2ns); imgui.Text("Nome"); imgui.SameLine(p2s); imgui.TextColored(sc,st); imgui.SameLine(p3ts); imgui.Text("Tipo"); imgui.Separator() end
 
+local function draw_faq_tab()
+    imgui.TextColored(IMAGE_GREEN, "Duvidas e FAQ"); imgui.Separator()
+    imgui.BeginChild("DuvidasFAQ", imgui.ImVec2(0,0), true)
+    
+    local search_term = remove_accents(state.search_text.v)
+    
+    if imgui.CollapsingHeader("Perguntas Frequentes") then
+        imgui.Spacing()
+        for i, item in ipairs(faq_list) do
+            local q_norm = remove_accents(item.q)
+            local a_norm = remove_accents(item.a)
+            if search_term == "" or q_norm:find(search_term, 1, true) or a_norm:find(search_term, 1, true) then
+                if imgui.CollapsingHeader(u8(item.q)) then
+                    if not item.buf then
+                        item.buf = imgui.ImBuffer(u8(item.a), #item.a + 1024)
+                    end
+                    local width = imgui.GetWindowWidth() - 50
+                    local text_size = imgui.CalcTextSize(u8(item.a), false, width)
+                    local height = text_size.y + 30
+                    if height < 60 then height = 60 end
+                    if height > 300 then height = 300 end
+                    imgui.InputTextMultiline("##ans_"..i, item.buf, imgui.ImVec2(-1, height), imgui.InputTextFlags.ReadOnly)
+                    if imgui.Button("Copiar Tudo##faq_"..i) then
+                        imgui.SetClipboardText(u8(item.a))
+                        sampAddChatMessage("[PI] Resposta copiada para a area de transferencia.", -1)
+                    end
+                    imgui.Spacing()
+                end
+            end
+        end
+        imgui.Spacing()
+    end
+    imgui.EndChild()
+end
+
 local function start_admin_login()
     sampSendChat("/logaradm")
     lua_thread.create(function()
@@ -960,7 +1023,7 @@ function imgui.OnDrawFrame()
         local _, myid = sampGetPlayerIdByCharHandle(PLAYER_PED); if myid then local mynick=sampGetPlayerNickname(myid) or "?"; imgui.TextColored(IMAGE_YELLOW, string.format("Voce: %s (ID: %d)", u8(mynick), myid)); imgui.Spacing() end
 
         local search_lbl = ""; local show_search = true
-        if state.active_tab == 1 then search_lbl="Pesq. Novato" elseif state.active_tab == 2 then search_lbl="Pesq. Online" elseif state.active_tab == 4 then if state.active_info_sub_tab == 1 then search_lbl="Pesq. Prof" elseif state.active_info_sub_tab == 2 then search_lbl="Pesq. Veh" elseif state.active_info_sub_tab == 3 then search_lbl="Pesq. Skin" elseif state.active_info_sub_tab == 4 then search_lbl="Pesq. Arma" else search_lbl="Pesq." end elseif state.active_tab == 9 then search_lbl="Pesq. Favorito" elseif state.active_tab == 11 or state.active_tab == 13 then show_search = false else search_lbl="Pesq." end
+        if state.active_tab == 1 then search_lbl="Pesq. Novato" elseif state.active_tab == 2 then search_lbl="Pesq. Online" elseif state.active_tab == 4 then if state.active_info_sub_tab == 1 then search_lbl="Pesq. Prof" elseif state.active_info_sub_tab == 2 then search_lbl="Pesq. Veh" elseif state.active_info_sub_tab == 3 then search_lbl="Pesq. Skin" elseif state.active_info_sub_tab == 4 then search_lbl="Pesq. Arma" elseif state.active_info_sub_tab == 5 then search_lbl="Pesq. FAQ" else search_lbl="Pesq." end elseif state.active_tab == 9 then search_lbl="Pesq. Favorito" elseif state.active_tab == 11 or state.active_tab == 13 then show_search = false else search_lbl="Pesq." end
         if show_search then imgui.InputText(search_lbl, state.search_text, imgui.ImVec2(300, 0)); imgui.Spacing() elseif state.active_tab ~= 11 then imgui.TextColored(IMAGE_GREY,"Selecione topico."); imgui.Spacing() end
         local search_u8 = u8(state.search_text.v):lower(); local search_cp = string.lower(state.search_text.v)
 
@@ -1145,7 +1208,7 @@ function imgui.OnDrawFrame()
 
         -- [[ ABA INFORMACOES (ID 4) ]]
         elseif state.active_tab == 4 then
-            local sub_tabs={{1,"Profissoes"},{2,"Veiculos"},{3,"Skins"},{4,"Armas"}}; local sub_space=(imgui.GetWindowWidth()-25)/#sub_tabs; local sub_btn_w=imgui.ImVec2(math.floor(sub_space)-5,22); local act_bg=IMAGE_WHITE; local act_hov=imgui.ImVec4(.8,.8,.8,1); local act_txt=IMAGE_BLACK; local inact_bg=imgui.GetStyle().Colors[imgui.Col.Button]; local inact_hov=imgui.GetStyle().Colors[imgui.Col.ButtonHovered]; local inact_txt=imgui.GetStyle().Colors[imgui.Col.Text]
+            local sub_tabs={{1,"Profissoes"},{2,"Veiculos"},{3,"Skins"},{4,"Armas"},{5,"Duvidas"}}; local sub_space=(imgui.GetWindowWidth()-25)/#sub_tabs; local sub_btn_w=imgui.ImVec2(math.floor(sub_space)-5,22); local act_bg=IMAGE_WHITE; local act_hov=imgui.ImVec4(.8,.8,.8,1); local act_txt=IMAGE_BLACK; local inact_bg=imgui.GetStyle().Colors[imgui.Col.Button]; local inact_hov=imgui.GetStyle().Colors[imgui.Col.ButtonHovered]; local inact_txt=imgui.GetStyle().Colors[imgui.Col.Text]
             for i,sub in ipairs(sub_tabs) do local sid,snm=sub[1],sub[2]; local is_act=state.active_info_sub_tab==sid; if is_act then imgui.PushStyleColor(imgui.Col.Button,act_bg); imgui.PushStyleColor(imgui.Col.ButtonHovered,act_hov); imgui.PushStyleColor(imgui.Col.ButtonActive,act_hov); imgui.PushStyleColor(imgui.Col.Text,act_txt) else imgui.PushStyleColor(imgui.Col.Button,inact_bg); imgui.PushStyleColor(imgui.Col.ButtonHovered,inact_hov); imgui.PushStyleColor(imgui.Col.ButtonActive,inact_hov); imgui.PushStyleColor(imgui.Col.Text,inact_txt) end; if imgui.Button(snm,sub_btn_w) then state.active_info_sub_tab=sid end; imgui.PopStyleColor(4); if i<#sub_tabs then imgui.SameLine(0,2) end end; imgui.Spacing(); imgui.Separator()
 
             if state.active_info_sub_tab == 1 then -- Profissoes
@@ -1245,6 +1308,9 @@ function imgui.OnDrawFrame()
                         imgui.SameLine(curX + align_offset); imgui.Text(tostring(w.id)); imgui.SameLine(p1s); imgui.TextColored(sc,st); imgui.SameLine(p2ns); imgui.Text(w.name or "?"); imgui.SameLine(p2s); imgui.TextColored(sc,st); imgui.SameLine(p3ts); imgui.TextColored(IMAGE_BLUE,w.type or "?") 
                     end 
                 end; imgui.EndChild()
+            elseif state.active_info_sub_tab == 5 then -- Duvidas
+                imgui.TextDisabled("Perguntas frequentes e historico de atualizacoes.")
+                draw_faq_tab()
             end
 
         -- [[ ABA LOCAIS (ID 9) - APENAS FAVORITOS ]]
