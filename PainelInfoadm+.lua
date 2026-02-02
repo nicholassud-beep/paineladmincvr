@@ -15,8 +15,8 @@ local u8 = function(s) return s and encoding.UTF8(s) or "" end
 
 script_name("PainelInfo")
 script_author("Gerado por ChatGPT (GPT-5 Thinking mini) - Consolidado e Corrigido por Gemini")
-script_version("8.9.53")
-local script_ver_num = 8953
+script_version("8.9.56")
+local script_ver_num = 8956
 script_version_number(script_ver_num)
 
 -- VARIAVEIS DO ADMIN ESP (INTEGRACAO)
@@ -1064,6 +1064,9 @@ end
 -- NOVA FUNÇÃO DE CONFIGURAÇÃO (VISUAL)
 -- =========================================================================
 local update_history = {
+    { version = "8.9.56", date = "01/02/2026", changes = { "Atualizados links uteis (Forum, Adm, Servidor, Changelog)." } },
+    { version = "8.9.55", date = "01/02/2026", changes = { "Adicionada sub-aba 'Links' em Informacoes com atalhos uteis." } },
+    { version = "8.9.54", date = "01/02/2026", changes = { "Adicionado botao para abrir Regras do Servidor (Forum)." } },
     { version = "8.9.53", date = "01/02/2026", changes = { "Respostas do FAQ agora sao selecionaveis (para copiar partes)." } },
     { version = "8.9.52", date = "01/02/2026", changes = { "Adicionado botao 'Copiar' para respostas do FAQ." } },
     { version = "8.9.51", date = "01/02/2026", changes = { "Adicionada Tabela de Tempos de Prisao e Regras de Banimento.", "Atualizados Cooldowns e Requisitos de Policia." } },
@@ -1122,6 +1125,10 @@ local update_history = {
 
 local function draw_faq_tab()
     imgui.TextColored(IMAGE_GREEN, "Duvidas e FAQ"); imgui.Separator()
+    if imgui.Button("Abrir Regras do Servidor (Forum)", imgui.ImVec2(-1, 25)) then
+        os.execute('explorer "https://www.loskatchorros.com.br/forum/index.php?/topic/328257-regras-do-servidor/"')
+    end
+    imgui.Spacing()
     imgui.BeginChild("DuvidasFAQ", imgui.ImVec2(0,0), true)
     
     local search_term = remove_accents(state.search_text.v)
@@ -1437,7 +1444,7 @@ end
 
 local function draw_info_tab()
     local search_norm = remove_accents(state.search_text.v)
-    local sub_tabs={{1,"Profissões"},{2,"Veículos"},{3,"Skins"},{4,"Armas"},{5,"Dúvidas"}}; local sub_space=(imgui.GetWindowWidth()-25)/#sub_tabs; local sub_btn_w=imgui.ImVec2(math.floor(sub_space)-5,22); local act_bg=IMAGE_WHITE; local act_hov=imgui.ImVec4(.8,.8,.8,1); local act_txt=IMAGE_BLACK; local inact_bg=imgui.GetStyle().Colors[imgui.Col.Button]; local inact_hov=imgui.GetStyle().Colors[imgui.Col.ButtonHovered]; local inact_txt=imgui.GetStyle().Colors[imgui.Col.Text]
+    local sub_tabs={{1,"Profissões"},{2,"Veículos"},{3,"Skins"},{4,"Armas"},{5,"Dúvidas"},{6,"Links"}}; local sub_space=(imgui.GetWindowWidth()-25)/#sub_tabs; local sub_btn_w=imgui.ImVec2(math.floor(sub_space)-5,22); local act_bg=IMAGE_WHITE; local act_hov=imgui.ImVec4(.8,.8,.8,1); local act_txt=IMAGE_BLACK; local inact_bg=imgui.GetStyle().Colors[imgui.Col.Button]; local inact_hov=imgui.GetStyle().Colors[imgui.Col.ButtonHovered]; local inact_txt=imgui.GetStyle().Colors[imgui.Col.Text]
     for i,sub in ipairs(sub_tabs) do local sid,snm=sub[1],sub[2]; local is_act=state.active_info_sub_tab==sid; if is_act then imgui.PushStyleColor(imgui.Col.Button,act_bg); imgui.PushStyleColor(imgui.Col.ButtonHovered,act_hov); imgui.PushStyleColor(imgui.Col.ButtonActive,act_hov); imgui.PushStyleColor(imgui.Col.Text,act_txt) else imgui.PushStyleColor(imgui.Col.Button,inact_bg); imgui.PushStyleColor(imgui.Col.ButtonHovered,inact_hov); imgui.PushStyleColor(imgui.Col.ButtonActive,inact_hov); imgui.PushStyleColor(imgui.Col.Text,inact_txt) end; if imgui.Button(snm,sub_btn_w) then state.active_info_sub_tab=sid end; imgui.PopStyleColor(4); if i<#sub_tabs then imgui.SameLine(0,2) end end; imgui.Spacing(); imgui.Separator()
     if state.active_info_sub_tab==3 or state.active_info_sub_tab==4 then imgui.Text("Aplicar em:"); imgui.SameLine(); imgui.PushItemWidth(80); imgui.InputText("ID##TargetID",state.target_id_buf); imgui.PopItemWidth(); imgui.SameLine(); if imgui.Button("Eu") then local _,mid=sampGetPlayerIdByCharHandle(PLAYER_PED); state.target_id_buf.v=tostring(mid) end; if state.active_info_sub_tab==4 then imgui.SameLine(); imgui.Text("Munição:"); imgui.SameLine(); imgui.PushItemWidth(80); imgui.InputText("##AmmoAmount",state.ammo_amount_buf); imgui.PopItemWidth() end; imgui.Spacing() end
 
@@ -1622,6 +1629,14 @@ local function draw_info_tab()
     elseif state.active_info_sub_tab == 5 then -- Duvidas
         imgui.TextDisabled("Perguntas frequentes e historico de atualizacoes.")
         draw_faq_tab()
+    elseif state.active_info_sub_tab == 6 then -- Links Uteis
+        imgui.TextColored(IMAGE_GREEN, "Links Uteis do Forum"); imgui.Separator(); imgui.Spacing()
+        local btn_size = imgui.ImVec2(-1, 30)
+        if imgui.Button("Forum - Pagina Inicial", btn_size) then os.execute('explorer "https://www.loskatchorros.com.br/forum/index.php"') end
+        if imgui.Button("Regras do Servidor", btn_size) then os.execute('explorer "https://www.loskatchorros.com.br/forum/index.php?/topic/328257-regras-do-servidor/"') end
+        if imgui.Button("Administracao", btn_size) then os.execute('explorer "https://www.loskatchorros.com.br/forum/index.php?/forum/13-administra%C3%A7%C3%A3o/"') end
+        if imgui.Button("Servidor", btn_size) then os.execute('explorer "https://www.loskatchorros.com.br/forum/index.php?/forum/151-servidor/"') end
+        if imgui.Button("Changelog (Atualizacoes)", btn_size) then os.execute('explorer "https://www.loskatchorros.com.br/forum/index.php?/forum/71-changelog/"') end
     end
 end
 
@@ -1901,7 +1916,7 @@ function imgui.OnDrawFrame()
         local _, myid = sampGetPlayerIdByCharHandle(PLAYER_PED); if myid then local mynick=sampGetPlayerNickname(myid) or "?"; imgui.TextColored(IMAGE_YELLOW, string.format("Voce: %s (ID: %d)", u8(mynick), myid)); imgui.Spacing() end
 
         local search_lbl = ""; local show_search = true
-        if state.active_tab == 1 then search_lbl="Pesq. Novato" elseif state.active_tab == 2 then search_lbl="Pesq. Online" elseif state.active_tab == 4 then if state.active_info_sub_tab == 1 then search_lbl="Pesq. Prof" elseif state.active_info_sub_tab == 2 then search_lbl="Pesq. Veh" elseif state.active_info_sub_tab == 3 then search_lbl="Pesq. Skin" elseif state.active_info_sub_tab == 4 then search_lbl="Pesq. Arma" elseif state.active_info_sub_tab == 5 then search_lbl="Pesq. FAQ" else search_lbl="Pesq." end elseif state.active_tab == 9 then if state.active_locais_sub_tab == 1 then search_lbl="Pesq. Interior" else search_lbl="Pesq. Favorito" end elseif state.active_tab == 11 or state.active_tab == 13 then show_search = false else search_lbl="Pesq." end
+        if state.active_tab == 1 then search_lbl="Pesq. Novato" elseif state.active_tab == 2 then search_lbl="Pesq. Online" elseif state.active_tab == 4 then if state.active_info_sub_tab == 1 then search_lbl="Pesq. Prof" elseif state.active_info_sub_tab == 2 then search_lbl="Pesq. Veh" elseif state.active_info_sub_tab == 3 then search_lbl="Pesq. Skin" elseif state.active_info_sub_tab == 4 then search_lbl="Pesq. Arma" elseif state.active_info_sub_tab == 5 then search_lbl="Pesq. FAQ" elseif state.active_info_sub_tab == 6 then show_search = false else search_lbl="Pesq." end elseif state.active_tab == 9 then if state.active_locais_sub_tab == 1 then search_lbl="Pesq. Interior" else search_lbl="Pesq. Favorito" end elseif state.active_tab == 11 or state.active_tab == 13 then show_search = false else search_lbl="Pesq." end
         if show_search then imgui.InputText(search_lbl, state.search_text, imgui.ImVec2(300, 0)); imgui.Spacing() elseif state.active_tab ~= 11 and (state.active_tab ~= 4 or state.active_info_sub_tab ~= 5) then imgui.TextColored(IMAGE_GREY,"Selecione topico."); imgui.Spacing() end
 
         if state.active_tab == 1 or state.active_tab == 2 then
