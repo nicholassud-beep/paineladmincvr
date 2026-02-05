@@ -15,8 +15,8 @@ local u8 = function(s) return s and encoding.UTF8(s) or "" end
 
 script_name("PainelInfo")
 script_author("Gerado por ChatGPT (GPT-5 Thinking mini) - Consolidado e Corrigido por Gemini")
-script_version("8.9.56")
-local script_ver_num = 8956
+script_version("8.9.73")
+local script_ver_num = 8973
 script_version_number(script_ver_num)
 
 -- VARIAVEIS DO ADMIN ESP (INTEGRACAO)
@@ -65,7 +65,20 @@ local state = {
     server_ip_buf = imgui.ImBuffer(32),
     stop_spec_requested = false,
     active_prof_veh_filter = nil,
-    player_ips = {}
+    player_ips = {},
+    window_duvidas = imgui.ImBool(false),
+    window_locais = imgui.ImBool(false),
+    window_ferramentas = imgui.ImBool(false),
+    window_veiculos = imgui.ImBool(false),
+    window_skins = imgui.ImBool(false),
+    window_armas = imgui.ImBool(false),
+    window_profissoes = imgui.ImBool(false),
+    search_text_duvidas = imgui.ImBuffer(256),
+    search_text_locais = imgui.ImBuffer(256),
+    search_text_veiculos = imgui.ImBuffer(256),
+    search_text_skins = imgui.ImBuffer(256),
+    search_text_armas = imgui.ImBuffer(256),
+    search_text_profissoes = imgui.ImBuffer(256)
 }
 state.ammo_amount_buf.v = "500"
 state.ip_extractor_total_buf.v = "300"
@@ -130,7 +143,7 @@ local function save_blacklist()
 end
 
 -- Função para Backup de Configuração (GLOBAL E CORRIGIDA)
-function backup_config()
+local function backup_config()
     local backup_dir = getWorkingDirectory() .. "\\config\\backups"
     if not doesDirectoryExist(backup_dir) then createDirectory(backup_dir) end
     local date_str = os.date("%Y-%m-%d_%H-%M-%S")
@@ -314,7 +327,7 @@ end
 
 local function remove_accents(str)
     if not str then return "" end
-    local s = str:lower()
+    local s = tostring(str):lower()
     s = s:gsub("[\224\225\226\227]", "a") -- áàâã
     s = s:gsub("[\232\233\234]", "e")     -- éê
     s = s:gsub("[\236\237]", "i")         -- í
@@ -581,8 +594,10 @@ local function filter_interiors(l, t)
     return f
 end
 
-local function strip_colors(text)
-    return text:gsub("{......}", "")
+local function strip_colors(s)
+    if not s then return "" end
+    s = s:gsub("{.-}", ""):gsub("~.-~", ""):gsub(" +", " ")
+    return s:match("^%s*(.-)%s*$") or ""
 end
 
 function sampev.onServerMessage(color, text)
@@ -816,7 +831,7 @@ function sampev.onSendCommand(cmd)
 end
 
 -- SETUP STYLE / TEMAS
-function apply_theme(theme_name)
+local function apply_theme(theme_name)
     local style = imgui.GetStyle()
     local colors = style.Colors
     local clr = imgui.Col
@@ -1064,6 +1079,20 @@ end
 -- NOVA FUNÇÃO DE CONFIGURAÇÃO (VISUAL)
 -- =========================================================================
 local update_history = {
+    { version = "8.9.73", date = "03/02/2026", changes = { "Adicionados campos de ID e Municao nas janelas separadas de Skins e Armas." } },
+    { version = "8.9.72", date = "03/02/2026", changes = { "Layout das janelas separadas otimizado (Modo Compacto)." } },
+    { version = "8.9.71", date = "03/02/2026", changes = { "Janelas redimensionadas para serem mais compactas." } },
+    { version = "8.9.70", date = "03/02/2026", changes = { "Barras de pesquisa discretas adicionadas em todas as janelas separadas." } },
+    { version = "8.9.69", date = "03/02/2026", changes = { "Correção final para janelas separadas e controle do cursor." } },
+    { version = "8.9.68", date = "03/02/2026", changes = { "Correcao de crash: Janelas separadas movidas para OnDrawFrame.", "Correcao de conflitos de ID ImGui." } },
+    { version = "8.9.67", date = "03/02/2026", changes = { "Correcao de crash no ImGui (Buffer de pesquisa separado para janela de Duvidas)." } },
+    { version = "8.9.66", date = "03/02/2026", changes = { "Correcao de crash na janela /duvidas (Buffer de texto aumentado).", "Adicionada barra de pesquisa na janela /duvidas." } },
+    { version = "8.9.65", date = "03/02/2026", changes = { "Adicionados comandos para abrir abas em janelas separadas (/duvidas, /locais, /veiculos, etc)." } },
+    { version = "8.9.64", date = "02/02/2026", changes = { "Removida lista de presos (funcionalidade desativada)." } },
+    { version = "8.9.63", date = "02/02/2026", changes = { "Atualizado comando de teste para incluir Prisao Municipal." } },
+    { version = "8.9.62", date = "02/02/2026", changes = { "Lista de Presos: Federal (Vermelho) e Municipal (Azul)." } },
+    { version = "8.9.61", date = "02/02/2026", changes = { "Adicionado comando '/testepresos' para testar a lista.", "Reaplicada melhoria de leitura de presos (hifen/barra)." } },
+    { version = "8.9.57", date = "02/02/2026", changes = { "Adicionado leitor de '/presos' integrado.", "Nova janela 'Lista de Presos' na aba Online." } },
     { version = "8.9.56", date = "01/02/2026", changes = { "Atualizados links uteis (Forum, Adm, Servidor, Changelog)." } },
     { version = "8.9.55", date = "01/02/2026", changes = { "Adicionada sub-aba 'Links' em Informacoes com atalhos uteis." } },
     { version = "8.9.54", date = "01/02/2026", changes = { "Adicionado botao para abrir Regras do Servidor (Forum)." } },
@@ -1123,15 +1152,17 @@ local update_history = {
     { version = "8.8.2", date = "15/01/2026", changes = { "Restauracao completa do codigo.", "Correcao de temas e cores.", "Correcao do botao de backup." } },
 }
 
-local function draw_faq_tab()
-    imgui.TextColored(IMAGE_GREEN, "Duvidas e FAQ"); imgui.Separator()
+local function draw_faq_tab(search_buf, suffix, compact)
+    if not compact then
+        imgui.TextColored(IMAGE_GREEN, "Duvidas e FAQ"); imgui.Separator()
+    end
     if imgui.Button("Abrir Regras do Servidor (Forum)", imgui.ImVec2(-1, 25)) then
         os.execute('explorer "https://www.loskatchorros.com.br/forum/index.php?/topic/328257-regras-do-servidor/"')
     end
     imgui.Spacing()
-    imgui.BeginChild("DuvidasFAQ", imgui.ImVec2(0,0), true)
+    imgui.BeginChild("DuvidasFAQ"..(suffix or ""), imgui.ImVec2(0,0), true)
     
-    local search_term = remove_accents(state.search_text.v)
+    local search_term = remove_accents(search_buf and search_buf.v or state.search_text.v)
     
     if imgui.CollapsingHeader("Perguntas Frequentes") then
         imgui.Spacing()
@@ -1141,7 +1172,7 @@ local function draw_faq_tab()
             if search_term == "" or q_norm:find(search_term, 1, true) or a_norm:find(search_term, 1, true) then
                 if imgui.CollapsingHeader(u8(item.q)) then
                     if not item.buf then
-                        item.buf = imgui.ImBuffer(u8(item.a), #item.a + 1024)
+                        item.buf = imgui.ImBuffer(u8(item.a), math.max(#item.a * 2, 4096)) -- Buffer maior para evitar crash
                     end
                     local width = imgui.GetWindowWidth() - 50
                     local text_size = imgui.CalcTextSize(u8(item.a), false, width)
@@ -1442,193 +1473,212 @@ local function draw_players_tab()
     imgui.EndChild()
 end
 
+local function draw_professions_content(search_val, compact)
+    local search_norm = remove_accents(search_val or state.search_text.v)
+    if not compact then imgui.TextDisabled("Lista de profissoes. Duplo clique para definir (setprof).") end
+    imgui.PushItemWidth(120)
+    imgui.Combo("##ProfTypeFilter", state.prof_type_filter_idx, prof_types)
+    imgui.PopItemWidth()
+    imgui.SameLine()
+    local selected_prof_type = prof_types[state.prof_type_filter_idx.v + 1]
+    imgui.TextColored(IMAGE_GREEN,"Profissões:"); imgui.Separator(); local filt_p=filter_professions(professions,search_norm); local cnt=#filt_p; local leg,maf={}, {}; for _,p in ipairs(filt_p) do if p.type=="Mafia" then table.insert(maf,p) else table.insert(leg,p) end end; imgui.Text("Encontradas: "..cnt); imgui.Separator(); imgui.BeginChild("ProfListInfo",imgui.ImVec2(0,0),true); draw_profession_header(); 
+    local function rend_p(l,h,c) 
+        if #l>0 then 
+            imgui.TextColored(c,h); imgui.Spacing(); 
+            local nw=250; local lw=100; local salw=110; 
+            local sc=IMAGE_GREY; local st="|"; local stw=imgui.CalcTextSize(st).x; local sp=imgui.GetStyle().ItemSpacing.x; 
+            local p1s=nw; local p2ls=p1s+stw+sp; local p2s=p2ls+lw; local p3ss=p2s+stw+sp; local p3s=p3ss+salw; local p4as=p3s+stw+sp; 
+            for _,p in ipairs(l) do 
+                local curX = imgui.GetCursorPosX()
+                local lbl=string.format("##pli_%s%d",p.name or "u", p.level or 0); 
+                imgui.Selectable(lbl,false,imgui.SelectableFlags_SpanAllColumns,imgui.ImVec2(0,imgui.GetTextLineHeight())); 
+                imgui.SetItemAllowOverlap()
+                if imgui.IsItemHovered() and imgui.IsMouseDoubleClicked(0) then 
+                    sampSendChat(string.format("/setprof %d", p.id)); 
+                    sampAddChatMessage(string.format("{FFFFFF}[PI] Profissao definida: {FFFF00}%s {FFFFFF}(ID: %d)", p.name or "?", p.id), -1) 
+                end; 
+                imgui.SameLine(curX); imgui.Text(p.name or "?"); 
+                imgui.SameLine(p1s); imgui.TextColored(sc,st); 
+                imgui.SameLine(p2ls); imgui.Text(tostring(p.level or "?")); 
+                imgui.SameLine(p2s); imgui.TextColored(sc,st); 
+                imgui.SameLine(p3ss); imgui.TextColored(IMAGE_YELLOW,"$"..formatPrice(p.salary or 0)) 
+                imgui.SameLine(p3s); imgui.TextColored(sc,st); 
+                imgui.SameLine(p4as); 
+                if imgui.SmallButton("Aplicar##"..p.id) then 
+                    sampSendChat(string.format("/setprof %d", p.id)); 
+                    sampAddChatMessage(string.format("{FFFFFF}[PI] Profissao definida: {FFFF00}%s {FFFFFF}(ID: %d)", p.name or "?", p.id), -1) 
+                end; 
+                if imgui.IsItemHovered() then imgui.SetTooltip("Clique para definir a profissao: " .. (p.name or "?")) end
+                if profession_vehicles_map[p.name:lower()] then
+                    imgui.SameLine()
+                    if imgui.SmallButton("Veiculos##"..p.id) then
+                        state.active_info_sub_tab = 2
+                        state.active_prof_veh_filter = p.name
+                        state.search_text.v = ""
+                    end
+                end
+            end 
+        end 
+    end; 
+    if cnt==0 then imgui.Text("Nenhuma.") else 
+        local sc=IMAGE_GREY; local st="|"; local stw=imgui.CalcTextSize(st).x; local sp=imgui.GetStyle().ItemSpacing.x; 
+        if selected_prof_type == "Todas" or selected_prof_type == "Honestas" then rend_p(leg,"--- Honestas ---",IMAGE_GREEN) end
+        if selected_prof_type == "Todas" and #leg>0 and #maf>0 then imgui.Spacing(); imgui.Separator(); imgui.Spacing() end
+        if selected_prof_type == "Todas" or selected_prof_type == "Mafia" then rend_p(maf,"--- Mafia ---",IMAGE_RED) end
+    end; 
+    imgui.EndChild()
+end
+
+local function draw_vehicles_content(search_val, compact)
+    local search_norm = remove_accents(search_val or state.search_text.v)
+    local filt_v = {}
+    if state.active_prof_veh_filter then
+        imgui.PushStyleColor(imgui.Col.Text, imgui.ImVec4(1, 0, 0, 1))
+        imgui.Text("Veículos de " .. state.active_prof_veh_filter)
+        imgui.PopStyleColor()
+        if imgui.Button("Voltar / Todos") then 
+            state.active_prof_veh_filter = nil 
+        end
+        
+        if state.active_prof_veh_filter then
+            local target_vehs = profession_vehicles_map[state.active_prof_veh_filter:lower()] or {}
+            local allowed = {}
+            for _, vname in ipairs(target_vehs) do allowed[vname:lower()] = true end
+            for _, v in ipairs(vehicles) do
+                if allowed[v.name:lower()] then table.insert(filt_v, v) end
+            end
+            table.sort(filt_v, function(a, b) return a.id < b.id end)
+        end
+    else
+            if not compact then imgui.TextDisabled("Lista de veiculos. Duplo clique para criar (/cv).") end
+        imgui.PushItemWidth(120)
+        imgui.Combo("##VehTypeFilter", state.veh_type_filter_idx, veh_types)
+        imgui.PopItemWidth()
+        imgui.SameLine()
+        local selected_type = veh_types[state.veh_type_filter_idx.v + 1]
+        filt_v=filter_vehicles(vehicles,search_norm,state.current_sort_column,state.sort_direction,selected_type)
+    end
+    
+    local cnt=#filt_v; imgui.Text("Veículos: "..cnt); imgui.Separator();
+    imgui.BeginChild("VehListInfo",imgui.ImVec2(0,0),true); draw_vehicle_header(); if cnt==0 then imgui.Text("Nenhum.") else 
+        local idw=50; local nw=180; local pw=110; local swid=110; local typew=100; 
+        local sc=IMAGE_GREY; local st="|"; local stw=imgui.CalcTextSize(st).x; local sp=imgui.GetStyle().ItemSpacing.x; 
+        local align_offset = imgui.GetStyle().FramePadding.x
+        local p1s=idw; local p2ns=p1s+stw+sp; local p2s=p2ns+nw; local p3ps=p2s+stw+sp; local p3s=p3ps+pw; local p4ss=p3s+stw+sp; local p4s=p4ss+swid; local p5ts=p4s+stw+sp; local p5s=p5ts+typew; local p6as=p5s+stw+sp; 
+        for _,v in ipairs(filt_v) do 
+            local curX = imgui.GetCursorPosX()
+            local lbl=string.format("##vli_%d",v.id); 
+            imgui.Selectable(lbl,false,imgui.SelectableFlags_SpanAllColumns,imgui.ImVec2(0,imgui.GetTextLineHeight())); 
+            imgui.SetItemAllowOverlap()
+            if imgui.IsItemHovered() and imgui.IsMouseDoubleClicked(0) then 
+                sampSendChat("/cv "..v.id)
+                sampAddChatMessage("[PI] Criando veiculo ID "..v.id.." ("..v.name..")",-1) 
+            end; 
+            local p_str=(v.price and v.price>0) and ("$"..formatPrice(v.price)) or "0"; local s_str=v.speed and (v.speed.." km/h") or "?"; local t_str=v.type or "?"; 
+            imgui.SameLine(curX + align_offset); imgui.Text(tostring(v.id)); 
+            imgui.SameLine(p1s); imgui.TextColored(sc,st); imgui.SameLine(p2ns + align_offset); imgui.Text(v.name); 
+            imgui.SameLine(p2s); imgui.TextColored(sc,st); imgui.SameLine(p3ps + align_offset); imgui.TextColored(IMAGE_YELLOW,p_str); 
+            imgui.SameLine(p3s); imgui.TextColored(sc,st); imgui.SameLine(p4ss + align_offset); imgui.TextColored(IMAGE_PINK,s_str); 
+            imgui.SameLine(p4s); imgui.TextColored(sc,st); imgui.SameLine(p5ts + align_offset); imgui.TextColored(IMAGE_BLUE,t_str) 
+            imgui.SameLine(p5s); imgui.TextColored(sc,st); imgui.SameLine(p6as); 
+            if imgui.SmallButton("Criar##btn_v_"..v.id) then 
+                sampSendChat("/cv "..v.id)
+                sampAddChatMessage("[PI] Criando veiculo ID "..v.id.." ("..v.name..")",-1) 
+            end 
+        end 
+    end; imgui.EndChild()
+end
+
+local function draw_skins_content(search_val, compact)
+    local search_norm = remove_accents(search_val or state.search_text.v)
+    if not compact then imgui.TextDisabled("Lista de skins. Defina o ID alvo acima e duplo clique para aplicar.") end
+    if not skin_search_map then imgui.TextColored(IMAGE_RED,"Erro!") else local filt_s=filter_skins(search_norm); local cnt=#filt_s; imgui.Text("Skins: "..cnt); imgui.Separator(); imgui.BeginChild("SkinListInfo",imgui.ImVec2(0,0),true); draw_skin_header(); if cnt==0 then imgui.Text("Nenhuma.") else 
+        local idw=50; local namew=200; local sc=IMAGE_GREY; local st="|"; local stw=imgui.CalcTextSize(st).x; local sp=imgui.GetStyle().ItemSpacing.x; 
+        local p1s=idw; local p2ns=p1s+stw+sp; local p2s=p2ns+namew; local p3as=p2s+stw+sp; 
+        for _,s in ipairs(filt_s) do 
+            local curX = imgui.GetCursorPosX()
+            local lbl=string.format("##sli_%d",s.id); 
+            imgui.Selectable(lbl,false,imgui.SelectableFlags_SpanAllColumns,imgui.ImVec2(0,imgui.GetTextLineHeight())); 
+            imgui.SetItemAllowOverlap()
+            if imgui.IsItemHovered() and imgui.IsMouseDoubleClicked(0) then 
+                local tid=tonumber(state.target_id_buf.v); 
+                if not tid or tid<0 then local _,myid=sampGetPlayerIdByCharHandle(PLAYER_PED); tid=myid end
+                if tid then 
+                    sampSendChat(string.format("/skins %d %d",tid,s.id)); 
+                    sampAddChatMessage(string.format("[PI] Skin %d aplicada no ID %d.",s.id,tid),-1) 
+                end 
+            end; 
+            imgui.SameLine(curX); imgui.Text(tostring(s.id)); imgui.SameLine(p1s); imgui.TextColored(sc,st); imgui.SameLine(p2ns); imgui.Text(s.name or "?") 
+            imgui.SameLine(p2s); imgui.TextColored(sc,st); imgui.SameLine(p3as); 
+            if imgui.SmallButton("Aplicar##btn_s_"..s.id) then 
+                local tid=tonumber(state.target_id_buf.v); 
+                if not tid or tid<0 then local _,myid=sampGetPlayerIdByCharHandle(PLAYER_PED); tid=myid end
+                if tid then 
+                    sampSendChat(string.format("/skins %d %d",tid,s.id)); 
+                    sampAddChatMessage(string.format("[PI] Skin %d aplicada no ID %d.",s.id,tid),-1) 
+                end 
+            end
+        end 
+    end; imgui.EndChild() end
+end
+
+local function draw_weapons_content(search_val, compact)
+    local search_norm = remove_accents(search_val or state.search_text.v)
+    if not compact then imgui.TextDisabled("Lista de armas. Defina ID alvo e municao acima, duplo clique para dar.") end
+    imgui.PushItemWidth(120)
+    imgui.Combo("##WeaponTypeFilter", state.weapon_type_filter_idx, weapon_types)
+    imgui.PopItemWidth()
+    imgui.SameLine()
+    local selected_w_type = weapon_types[state.weapon_type_filter_idx.v + 1]
+    local filt_w=filter_weapons(weapons_list,search_norm,selected_w_type); local cnt=#filt_w; imgui.Text("Armas: "..cnt); imgui.Separator(); imgui.BeginChild("WeaponListInfo",imgui.ImVec2(0,0),true); draw_weapon_header(); if cnt==0 then imgui.Text("Nenhuma.") else 
+        local idw=60; local nw=200; local typew=120; 
+        local sc=IMAGE_GREY; local st="|"; local stw=imgui.CalcTextSize(st).x; local sp=imgui.GetStyle().ItemSpacing.x; 
+        local p1s=idw; local p2ns=p1s+stw+sp; local p2s=p2ns+nw; local p3ts=p2s+stw+sp; local p3s=p3ts+typew; local p4as=p3s+stw+sp; 
+        for _,w in ipairs(filt_w) do 
+            local curX = imgui.GetCursorPosX()
+            local lbl=string.format("##wli_%d",w.id); 
+            imgui.Selectable(lbl,false,imgui.SelectableFlags_SpanAllColumns,imgui.ImVec2(0,imgui.GetTextLineHeight())); 
+            imgui.SetItemAllowOverlap()
+            if imgui.IsItemHovered() and imgui.IsMouseDoubleClicked(0) then 
+                local tid=tonumber(state.target_id_buf.v); local ammo=tonumber(state.ammo_amount_buf.v) or 500; 
+                if not tid or tid<0 then local _,myid=sampGetPlayerIdByCharHandle(PLAYER_PED); tid=myid end
+                if tid then 
+                    sampSendChat(string.format("/dararma %d %d %d",tid,w.id,ammo)); 
+                    sampAddChatMessage(string.format("[PI] Arma %s (%d) dada ao ID %d.",w.name or "?",ammo,tid),-1) 
+                end 
+            end; 
+            imgui.SameLine(curX); imgui.Text(tostring(w.id)); 
+            imgui.SameLine(p1s); imgui.TextColored(sc,st); imgui.SameLine(p2ns); imgui.Text(w.name or "?"); 
+            imgui.SameLine(p2s); imgui.TextColored(sc,st); imgui.SameLine(p3ts); imgui.TextColored(IMAGE_BLUE,w.type or "?") 
+            imgui.SameLine(p3s); imgui.TextColored(sc,st); imgui.SameLine(p4as); 
+            if imgui.SmallButton("Setar##btn_w_"..w.id) then 
+                local tid=tonumber(state.target_id_buf.v); local ammo=tonumber(state.ammo_amount_buf.v) or 500; 
+                if not tid or tid<0 then local _,myid=sampGetPlayerIdByCharHandle(PLAYER_PED); tid=myid end
+                if tid then 
+                    sampSendChat(string.format("/dararma %d %d %d",tid,w.id,ammo)); 
+                    sampAddChatMessage(string.format("[PI] Arma %s (%d) dada ao ID %d.",w.name or "?",ammo,tid),-1) 
+                end 
+            end
+        end 
+    end; imgui.EndChild()
+end
+
 local function draw_info_tab()
-    local search_norm = remove_accents(state.search_text.v)
     local sub_tabs={{1,"Profissões"},{2,"Veículos"},{3,"Skins"},{4,"Armas"},{5,"Dúvidas"},{6,"Links"}}; local sub_space=(imgui.GetWindowWidth()-25)/#sub_tabs; local sub_btn_w=imgui.ImVec2(math.floor(sub_space)-5,22); local act_bg=IMAGE_WHITE; local act_hov=imgui.ImVec4(.8,.8,.8,1); local act_txt=IMAGE_BLACK; local inact_bg=imgui.GetStyle().Colors[imgui.Col.Button]; local inact_hov=imgui.GetStyle().Colors[imgui.Col.ButtonHovered]; local inact_txt=imgui.GetStyle().Colors[imgui.Col.Text]
     for i,sub in ipairs(sub_tabs) do local sid,snm=sub[1],sub[2]; local is_act=state.active_info_sub_tab==sid; if is_act then imgui.PushStyleColor(imgui.Col.Button,act_bg); imgui.PushStyleColor(imgui.Col.ButtonHovered,act_hov); imgui.PushStyleColor(imgui.Col.ButtonActive,act_hov); imgui.PushStyleColor(imgui.Col.Text,act_txt) else imgui.PushStyleColor(imgui.Col.Button,inact_bg); imgui.PushStyleColor(imgui.Col.ButtonHovered,inact_hov); imgui.PushStyleColor(imgui.Col.ButtonActive,inact_hov); imgui.PushStyleColor(imgui.Col.Text,inact_txt) end; if imgui.Button(snm,sub_btn_w) then state.active_info_sub_tab=sid end; imgui.PopStyleColor(4); if i<#sub_tabs then imgui.SameLine(0,2) end end; imgui.Spacing(); imgui.Separator()
     if state.active_info_sub_tab==3 or state.active_info_sub_tab==4 then imgui.Text("Aplicar em:"); imgui.SameLine(); imgui.PushItemWidth(80); imgui.InputText("ID##TargetID",state.target_id_buf); imgui.PopItemWidth(); imgui.SameLine(); if imgui.Button("Eu") then local _,mid=sampGetPlayerIdByCharHandle(PLAYER_PED); state.target_id_buf.v=tostring(mid) end; if state.active_info_sub_tab==4 then imgui.SameLine(); imgui.Text("Munição:"); imgui.SameLine(); imgui.PushItemWidth(80); imgui.InputText("##AmmoAmount",state.ammo_amount_buf); imgui.PopItemWidth() end; imgui.Spacing() end
 
     if state.active_info_sub_tab == 1 then -- Profissoes
-        imgui.TextDisabled("Lista de profissoes. Duplo clique para definir (setprof).")
-        imgui.PushItemWidth(120)
-        imgui.Combo("##ProfTypeFilter", state.prof_type_filter_idx, prof_types)
-        imgui.PopItemWidth()
-        imgui.SameLine()
-        local selected_prof_type = prof_types[state.prof_type_filter_idx.v + 1]
-        imgui.TextColored(IMAGE_GREEN,"Profissões:"); imgui.Separator(); local filt_p=filter_professions(professions,search_norm); local cnt=#filt_p; local leg,maf={}, {}; for _,p in ipairs(filt_p) do if p.type=="Mafia" then table.insert(maf,p) else table.insert(leg,p) end end; imgui.Text("Encontradas: "..cnt); imgui.Separator(); imgui.BeginChild("ProfListInfo",imgui.ImVec2(0,0),true); draw_profession_header(); 
-        local function rend_p(l,h,c) 
-            if #l>0 then 
-                imgui.TextColored(c,h); imgui.Spacing(); 
-                local nw=250; local lw=100; local salw=110; 
-                local sc=IMAGE_GREY; local st="|"; local stw=imgui.CalcTextSize(st).x; local sp=imgui.GetStyle().ItemSpacing.x; 
-                local p1s=nw; local p2ls=p1s+stw+sp; local p2s=p2ls+lw; local p3ss=p2s+stw+sp; local p3s=p3ss+salw; local p4as=p3s+stw+sp; 
-                for _,p in ipairs(l) do 
-                    local curX = imgui.GetCursorPosX()
-                    local lbl=string.format("##pli_%s%d",p.name or "u", p.level or 0); 
-                    imgui.Selectable(lbl,false,imgui.SelectableFlags_SpanAllColumns,imgui.ImVec2(0,imgui.GetTextLineHeight())); 
-                    imgui.SetItemAllowOverlap()
-                    if imgui.IsItemHovered() and imgui.IsMouseDoubleClicked(0) then 
-                        sampSendChat(string.format("/setprof %d", p.id)); 
-                        sampAddChatMessage(string.format("{FFFFFF}[PI] Profissao definida: {FFFF00}%s {FFFFFF}(ID: %d)", p.name or "?", p.id), -1) 
-                    end; 
-                    imgui.SameLine(curX); imgui.Text(p.name or "?"); 
-                    imgui.SameLine(p1s); imgui.TextColored(sc,st); 
-                    imgui.SameLine(p2ls); imgui.Text(tostring(p.level or "?")); 
-                    imgui.SameLine(p2s); imgui.TextColored(sc,st); 
-                    imgui.SameLine(p3ss); imgui.TextColored(IMAGE_YELLOW,"$"..formatPrice(p.salary or 0)) 
-                    imgui.SameLine(p3s); imgui.TextColored(sc,st); 
-                    imgui.SameLine(p4as); 
-                    if imgui.SmallButton("Aplicar##"..p.id) then 
-                        sampSendChat(string.format("/setprof %d", p.id)); 
-                        sampAddChatMessage(string.format("{FFFFFF}[PI] Profissao definida: {FFFF00}%s {FFFFFF}(ID: %d)", p.name or "?", p.id), -1) 
-                    end; 
-                    if imgui.IsItemHovered() then imgui.SetTooltip("Clique para definir a profissao: " .. (p.name or "?")) end
-                    if profession_vehicles_map[p.name:lower()] then
-                        imgui.SameLine()
-                        if imgui.SmallButton("Veiculos##"..p.id) then
-                            state.active_info_sub_tab = 2
-                            state.active_prof_veh_filter = p.name
-                            state.search_text.v = ""
-                        end
-                    end
-                end 
-            end 
-        end; 
-        if cnt==0 then imgui.Text("Nenhuma.") else 
-            local sc=IMAGE_GREY; local st="|"; local stw=imgui.CalcTextSize(st).x; local sp=imgui.GetStyle().ItemSpacing.x; 
-            if selected_prof_type == "Todas" or selected_prof_type == "Honestas" then rend_p(leg,"--- Honestas ---",IMAGE_GREEN) end
-            if selected_prof_type == "Todas" and #leg>0 and #maf>0 then imgui.Spacing(); imgui.Separator(); imgui.Spacing() end
-            if selected_prof_type == "Todas" or selected_prof_type == "Mafia" then rend_p(maf,"--- Mafia ---",IMAGE_RED) end
-        end; 
-        imgui.EndChild()
+        draw_professions_content()
     elseif state.active_info_sub_tab == 2 then -- Veiculos
-        local filt_v = {}
-        if state.active_prof_veh_filter then
-            imgui.PushStyleColor(imgui.Col.Text, imgui.ImVec4(1, 0, 0, 1))
-            imgui.Text("Veículos de " .. state.active_prof_veh_filter)
-            imgui.PopStyleColor()
-            if imgui.Button("Voltar / Todos") then 
-                state.active_prof_veh_filter = nil 
-            end
-            
-            if state.active_prof_veh_filter then
-                local target_vehs = profession_vehicles_map[state.active_prof_veh_filter:lower()] or {}
-                local allowed = {}
-                for _, vname in ipairs(target_vehs) do allowed[vname:lower()] = true end
-                for _, v in ipairs(vehicles) do
-                    if allowed[v.name:lower()] then table.insert(filt_v, v) end
-                end
-                table.sort(filt_v, function(a, b) return a.id < b.id end)
-            end
-        else
-            imgui.TextDisabled("Lista de veiculos. Duplo clique para criar (/cv).")
-            imgui.PushItemWidth(120)
-            imgui.Combo("##VehTypeFilter", state.veh_type_filter_idx, veh_types)
-            imgui.PopItemWidth()
-            imgui.SameLine()
-            local selected_type = veh_types[state.veh_type_filter_idx.v + 1]
-            filt_v=filter_vehicles(vehicles,search_norm,state.current_sort_column,state.sort_direction,selected_type)
-        end
-        
-        local cnt=#filt_v; imgui.Text("Veículos: "..cnt); imgui.Separator();
-        imgui.BeginChild("VehListInfo",imgui.ImVec2(0,0),true); draw_vehicle_header(); if cnt==0 then imgui.Text("Nenhum.") else 
-            local idw=50; local nw=180; local pw=110; local swid=110; local typew=100; 
-            local sc=IMAGE_GREY; local st="|"; local stw=imgui.CalcTextSize(st).x; local sp=imgui.GetStyle().ItemSpacing.x; 
-            local align_offset = imgui.GetStyle().FramePadding.x
-            local p1s=idw; local p2ns=p1s+stw+sp; local p2s=p2ns+nw; local p3ps=p2s+stw+sp; local p3s=p3ps+pw; local p4ss=p3s+stw+sp; local p4s=p4ss+swid; local p5ts=p4s+stw+sp; local p5s=p5ts+typew; local p6as=p5s+stw+sp; 
-            for _,v in ipairs(filt_v) do 
-                local curX = imgui.GetCursorPosX()
-                local lbl=string.format("##vli_%d",v.id); 
-                imgui.Selectable(lbl,false,imgui.SelectableFlags_SpanAllColumns,imgui.ImVec2(0,imgui.GetTextLineHeight())); 
-                imgui.SetItemAllowOverlap()
-                if imgui.IsItemHovered() and imgui.IsMouseDoubleClicked(0) then 
-                    sampSendChat("/cv "..v.id)
-                    sampAddChatMessage("[PI] Criando veiculo ID "..v.id.." ("..v.name..")",-1) 
-                end; 
-                local p_str=(v.price and v.price>0) and ("$"..formatPrice(v.price)) or "0"; local s_str=v.speed and (v.speed.." km/h") or "?"; local t_str=v.type or "?"; 
-                imgui.SameLine(curX + align_offset); imgui.Text(tostring(v.id)); 
-                imgui.SameLine(p1s); imgui.TextColored(sc,st); imgui.SameLine(p2ns + align_offset); imgui.Text(v.name); 
-                imgui.SameLine(p2s); imgui.TextColored(sc,st); imgui.SameLine(p3ps + align_offset); imgui.TextColored(IMAGE_YELLOW,p_str); 
-                imgui.SameLine(p3s); imgui.TextColored(sc,st); imgui.SameLine(p4ss + align_offset); imgui.TextColored(IMAGE_PINK,s_str); 
-                imgui.SameLine(p4s); imgui.TextColored(sc,st); imgui.SameLine(p5ts + align_offset); imgui.TextColored(IMAGE_BLUE,t_str) 
-                imgui.SameLine(p5s); imgui.TextColored(sc,st); imgui.SameLine(p6as); 
-                if imgui.SmallButton("Criar##btn_v_"..v.id) then 
-                    sampSendChat("/cv "..v.id)
-                    sampAddChatMessage("[PI] Criando veiculo ID "..v.id.." ("..v.name..")",-1) 
-                end 
-            end 
-        end; imgui.EndChild()
+        draw_vehicles_content()
     elseif state.active_info_sub_tab == 3 then -- Skins
-        imgui.TextDisabled("Lista de skins. Defina o ID alvo acima e duplo clique para aplicar.")
-        if not skin_search_map then imgui.TextColored(IMAGE_RED,"Erro!") else local filt_s=filter_skins(search_norm); local cnt=#filt_s; imgui.Text("Skins: "..cnt); imgui.Separator(); imgui.BeginChild("SkinListInfo",imgui.ImVec2(0,0),true); draw_skin_header(); if cnt==0 then imgui.Text("Nenhuma.") else 
-            local idw=50; local namew=200; local sc=IMAGE_GREY; local st="|"; local stw=imgui.CalcTextSize(st).x; local sp=imgui.GetStyle().ItemSpacing.x; 
-            local p1s=idw; local p2ns=p1s+stw+sp; local p2s=p2ns+namew; local p3as=p2s+stw+sp; 
-            for _,s in ipairs(filt_s) do 
-                local curX = imgui.GetCursorPosX()
-                local lbl=string.format("##sli_%d",s.id); 
-                imgui.Selectable(lbl,false,imgui.SelectableFlags_SpanAllColumns,imgui.ImVec2(0,imgui.GetTextLineHeight())); 
-                imgui.SetItemAllowOverlap()
-                if imgui.IsItemHovered() and imgui.IsMouseDoubleClicked(0) then 
-                    local tid=tonumber(state.target_id_buf.v); 
-                    if not tid or tid<0 then local _,myid=sampGetPlayerIdByCharHandle(PLAYER_PED); tid=myid end
-                    if tid then 
-                        sampSendChat(string.format("/skins %d %d",tid,s.id)); 
-                        sampAddChatMessage(string.format("[PI] Skin %d aplicada no ID %d.",s.id,tid),-1) 
-                    end 
-                end; 
-                imgui.SameLine(curX); imgui.Text(tostring(s.id)); imgui.SameLine(p1s); imgui.TextColored(sc,st); imgui.SameLine(p2ns); imgui.Text(s.name or "?") 
-                imgui.SameLine(p2s); imgui.TextColored(sc,st); imgui.SameLine(p3as); 
-                if imgui.SmallButton("Aplicar##btn_s_"..s.id) then 
-                    local tid=tonumber(state.target_id_buf.v); 
-                    if not tid or tid<0 then local _,myid=sampGetPlayerIdByCharHandle(PLAYER_PED); tid=myid end
-                    if tid then 
-                        sampSendChat(string.format("/skins %d %d",tid,s.id)); 
-                        sampAddChatMessage(string.format("[PI] Skin %d aplicada no ID %d.",s.id,tid),-1) 
-                    end 
-                end
-            end 
-        end; imgui.EndChild() end
+        draw_skins_content()
     elseif state.active_info_sub_tab == 4 then -- Armas
-        imgui.TextDisabled("Lista de armas. Defina ID alvo e municao acima, duplo clique para dar.")
-        imgui.PushItemWidth(120)
-        imgui.Combo("##WeaponTypeFilter", state.weapon_type_filter_idx, weapon_types)
-        imgui.PopItemWidth()
-        imgui.SameLine()
-        local selected_w_type = weapon_types[state.weapon_type_filter_idx.v + 1]
-        local filt_w=filter_weapons(weapons_list,search_norm,selected_w_type); local cnt=#filt_w; imgui.Text("Armas: "..cnt); imgui.Separator(); imgui.BeginChild("WeaponListInfo",imgui.ImVec2(0,0),true); draw_weapon_header(); if cnt==0 then imgui.Text("Nenhuma.") else 
-            local idw=60; local nw=200; local typew=120; 
-            local sc=IMAGE_GREY; local st="|"; local stw=imgui.CalcTextSize(st).x; local sp=imgui.GetStyle().ItemSpacing.x; 
-            local p1s=idw; local p2ns=p1s+stw+sp; local p2s=p2ns+nw; local p3ts=p2s+stw+sp; local p3s=p3ts+typew; local p4as=p3s+stw+sp; 
-            for _,w in ipairs(filt_w) do 
-                local curX = imgui.GetCursorPosX()
-                local lbl=string.format("##wli_%d",w.id); 
-                imgui.Selectable(lbl,false,imgui.SelectableFlags_SpanAllColumns,imgui.ImVec2(0,imgui.GetTextLineHeight())); 
-                imgui.SetItemAllowOverlap()
-                if imgui.IsItemHovered() and imgui.IsMouseDoubleClicked(0) then 
-                    local tid=tonumber(state.target_id_buf.v); local ammo=tonumber(state.ammo_amount_buf.v) or 500; 
-                    if not tid or tid<0 then local _,myid=sampGetPlayerIdByCharHandle(PLAYER_PED); tid=myid end
-                    if tid then 
-                        sampSendChat(string.format("/dararma %d %d %d",tid,w.id,ammo)); 
-                        sampAddChatMessage(string.format("[PI] Arma %s (%d) dada ao ID %d.",w.name or "?",ammo,tid),-1) 
-                    end 
-                end; 
-                imgui.SameLine(curX); imgui.Text(tostring(w.id)); 
-                imgui.SameLine(p1s); imgui.TextColored(sc,st); imgui.SameLine(p2ns); imgui.Text(w.name or "?"); 
-                imgui.SameLine(p2s); imgui.TextColored(sc,st); imgui.SameLine(p3ts); imgui.TextColored(IMAGE_BLUE,w.type or "?") 
-                imgui.SameLine(p3s); imgui.TextColored(sc,st); imgui.SameLine(p4as); 
-                if imgui.SmallButton("Setar##btn_w_"..w.id) then 
-                    local tid=tonumber(state.target_id_buf.v); local ammo=tonumber(state.ammo_amount_buf.v) or 500; 
-                    if not tid or tid<0 then local _,myid=sampGetPlayerIdByCharHandle(PLAYER_PED); tid=myid end
-                    if tid then 
-                        sampSendChat(string.format("/dararma %d %d %d",tid,w.id,ammo)); 
-                        sampAddChatMessage(string.format("[PI] Arma %s (%d) dada ao ID %d.",w.name or "?",ammo,tid),-1) 
-                    end 
-                end
-            end 
-        end; imgui.EndChild()
+        draw_weapons_content()
     elseif state.active_info_sub_tab == 5 then -- Duvidas
         imgui.TextDisabled("Perguntas frequentes e historico de atualizacoes.")
-        draw_faq_tab()
+        draw_faq_tab(state.search_text, "Main")
     elseif state.active_info_sub_tab == 6 then -- Links Uteis
         imgui.TextColored(IMAGE_GREEN, "Links Uteis do Forum"); imgui.Separator(); imgui.Spacing()
         local btn_size = imgui.ImVec2(-1, 30)
@@ -1640,13 +1690,13 @@ local function draw_info_tab()
     end
 end
 
-local function draw_locais_tab()
-    local search_norm = remove_accents(state.search_text.v)
+local function draw_locais_tab(search_val, compact)
+    local search_norm = remove_accents(search_val or state.search_text.v)
     local sub_tabs={{1,"Interiores"},{2,"Favoritos"}}; local sub_space=(imgui.GetWindowWidth()-25)/#sub_tabs; local sub_btn_w=imgui.ImVec2(math.floor(sub_space)-5,22); local act_bg=IMAGE_WHITE; local act_hov=imgui.ImVec4(.8,.8,.8,1); local act_txt=IMAGE_BLACK; local inact_bg=imgui.GetStyle().Colors[imgui.Col.Button]; local inact_hov=imgui.GetStyle().Colors[imgui.Col.ButtonHovered]; local inact_txt=imgui.GetStyle().Colors[imgui.Col.Text]
     for i,sub in ipairs(sub_tabs) do local sid,snm=sub[1],sub[2]; local is_act=state.active_locais_sub_tab==sid; if is_act then imgui.PushStyleColor(imgui.Col.Button,act_bg); imgui.PushStyleColor(imgui.Col.ButtonHovered,act_hov); imgui.PushStyleColor(imgui.Col.ButtonActive,act_hov); imgui.PushStyleColor(imgui.Col.Text,act_txt) else imgui.PushStyleColor(imgui.Col.Button,inact_bg); imgui.PushStyleColor(imgui.Col.ButtonHovered,inact_hov); imgui.PushStyleColor(imgui.Col.ButtonActive,inact_hov); imgui.PushStyleColor(imgui.Col.Text,inact_txt) end; if imgui.Button(snm,sub_btn_w) then state.active_locais_sub_tab=sid end; imgui.PopStyleColor(4); if i<#sub_tabs then imgui.SameLine(0,2) end end; imgui.Spacing(); imgui.Separator()
 
     if state.active_locais_sub_tab == 1 then
-        imgui.TextDisabled("Interiores do jogo. Duplo clique para ir. Botao direito para favoritar.")
+        if not compact then imgui.TextDisabled("Interiores do jogo. Duplo clique para ir. Botao direito para favoritar.") end
         local filt_int=filter_interiors(interiors_list,search_norm); local cnt=#filt_int; imgui.Text("Interiores: "..cnt); imgui.Separator(); imgui.BeginChild("IntList",imgui.ImVec2(0,0),true); draw_interior_header(); 
         if cnt==0 then imgui.Text("Nenhum.") else 
             local nw=300; local cw=200; local sc=IMAGE_GREY; local st="|"; local sw=imgui.CalcTextSize(st).x; local sp=imgui.GetStyle().ItemSpacing.x; local p1s=nw; local p2cs=p1s+sw+sp; local p2s=p2cs+cw; local p3is=p2s+sw+sp; 
@@ -1672,7 +1722,7 @@ local function draw_locais_tab()
             end 
         end; imgui.EndChild()
     elseif state.active_locais_sub_tab == 2 then
-        imgui.TextDisabled("Seus locais salvos. Use 'Salvar Atual' para gravar sua posicao.")
+        if not compact then imgui.TextDisabled("Seus locais salvos. Use 'Salvar Atual' para gravar sua posicao.") end
         imgui.Text("Novo Favorito:")
         imgui.SameLine()
         imgui.PushItemWidth(170)
@@ -1791,9 +1841,11 @@ local function draw_locais_tab()
     end
 end
 
-local function draw_comandos_tab()
-    imgui.Text("Comandos Rapidos"); imgui.Separator()
-    imgui.TextDisabled("Atalhos para comandos uteis e ferramentas administrativas.")
+local function draw_comandos_tab(compact)
+    if not compact then
+        imgui.Text("Comandos Rapidos"); imgui.Separator()
+        imgui.TextDisabled("Atalhos para comandos uteis e ferramentas administrativas.")
+    end
     imgui.BeginChild("CmdsList", imgui.ImVec2(0,0), true)
     
     if imgui.Button("/painelevento", imgui.ImVec2(150, 30)) then sampSendChat("/painelevento") end
@@ -1904,9 +1956,9 @@ end
 -- =========================================================================
 function imgui.OnDrawFrame()
     if state.window_open.v then
-        local sw, sh = getScreenResolution(); imgui.SetNextWindowPos(imgui.ImVec2(sw / 2, sh / 2), imgui.Cond.FirstUseEver, imgui.ImVec2(0.5, 0.5)); imgui.SetNextWindowSize(imgui.ImVec2(700, 500), imgui.Cond.FirstUseEver)
+        local sw, sh = getScreenResolution(); imgui.SetNextWindowPos(imgui.ImVec2(sw / 2, sh / 2), imgui.Cond.FirstUseEver, imgui.ImVec2(0.5, 0.5)); imgui.SetNextWindowSize(imgui.ImVec2(600, 400), imgui.Cond.FirstUseEver)
         
-        imgui.Begin("Painel Admin [F12] - v8.9.45", state.window_open)
+        imgui.Begin("Painel Admin [F12] - v" .. thisScript().version, state.window_open)
 
         local tabs = { {1, "Novatos"}, {2, "Online"}, {4, "Informações"}, {9, "Locais"}, {13, "Comandos"}, {11, "Config"} }; local btn_space = imgui.GetWindowWidth() / #tabs; local btn_w = imgui.ImVec2(math.floor(btn_space) - 5, 25); local act_bg=IMAGE_WHITE; local act_hov=imgui.ImVec4(.8,.8,.8,1); local act_txt=IMAGE_BLACK; local inact_bg=imgui.GetStyle().Colors[imgui.Col.Button]; local inact_hov=imgui.GetStyle().Colors[imgui.Col.ButtonHovered]; local inact_txt=imgui.GetStyle().Colors[imgui.Col.Text]
         for i, tab in ipairs(tabs) do local tid, tnm = tab[1], tab[2]; local is_act = state.active_tab == tid; if is_act then imgui.PushStyleColor(imgui.Col.Button,act_bg); imgui.PushStyleColor(imgui.Col.ButtonHovered,act_hov); imgui.PushStyleColor(imgui.Col.ButtonActive,act_hov); imgui.PushStyleColor(imgui.Col.Text,act_txt) else imgui.PushStyleColor(imgui.Col.Button,inact_bg); imgui.PushStyleColor(imgui.Col.ButtonHovered,inact_hov); imgui.PushStyleColor(imgui.Col.ButtonActive,inact_hov); imgui.PushStyleColor(imgui.Col.Text,inact_txt) end; if imgui.Button(tnm, btn_w) then if state.active_tab ~= tid then state.active_tab=tid end end; imgui.PopStyleColor(4); if i < #tabs then imgui.SameLine(0, 2) end end; imgui.Separator(); imgui.Text(string.format("Hora: %s", os.date("%H:%M:%S"))); 
@@ -1933,10 +1985,126 @@ function imgui.OnDrawFrame()
 
         imgui.End()
     end
+
+    -- JANELAS SEPARADAS (MOVIDAS PARA ONDRAWFRAME PARA EVITAR CRASH)
+    if state.window_duvidas.v then
+        imgui.SetNextWindowSize(imgui.ImVec2(400, 300), imgui.Cond.FirstUseEver)
+        if imgui.Begin("Duvidas e FAQ", state.window_duvidas, imgui.WindowFlags.NoCollapse) then
+            imgui.PushItemWidth(-1)
+            imgui.InputText("##searchDuvidas", state.search_text_duvidas)
+            imgui.PopItemWidth()
+            draw_faq_tab(state.search_text_duvidas, "Win", true)
+        end
+        imgui.End()
+    end
+
+    if state.window_locais.v then
+        imgui.SetNextWindowSize(imgui.ImVec2(400, 300), imgui.Cond.FirstUseEver)
+        if imgui.Begin("Locais e Teleportes", state.window_locais, imgui.WindowFlags.NoCollapse) then
+            imgui.PushItemWidth(-1)
+            imgui.InputText("##searchLocais", state.search_text_locais)
+            imgui.PopItemWidth()
+            imgui.PushID("WinLocais")
+            draw_locais_tab(state.search_text_locais.v, true)
+            imgui.PopID()
+        end
+        imgui.End()
+    end
+
+    if state.window_ferramentas.v then
+        imgui.SetNextWindowSize(imgui.ImVec2(300, 250), imgui.Cond.FirstUseEver)
+        if imgui.Begin("Ferramentas e Atalhos", state.window_ferramentas, imgui.WindowFlags.NoCollapse) then
+            imgui.PushID("WinFerramentas")
+            draw_comandos_tab(true)
+            imgui.PopID()
+        end
+        imgui.End()
+    end
+
+    if state.window_veiculos.v then
+        imgui.SetNextWindowSize(imgui.ImVec2(500, 350), imgui.Cond.FirstUseEver)
+        if imgui.Begin("Lista de Veiculos", state.window_veiculos, imgui.WindowFlags.NoCollapse) then
+            imgui.PushItemWidth(-1)
+            imgui.InputText("##searchVeh", state.search_text_veiculos)
+            imgui.PopItemWidth()
+            imgui.PushID("WinVeh")
+            draw_vehicles_content(state.search_text_veiculos.v, true)
+            imgui.PopID()
+        end
+        imgui.End()
+    end
+
+    if state.window_skins.v then
+        imgui.SetNextWindowSize(imgui.ImVec2(350, 350), imgui.Cond.FirstUseEver)
+        if imgui.Begin("Lista de Skins", state.window_skins, imgui.WindowFlags.NoCollapse) then
+            imgui.PushItemWidth(-1)
+            imgui.InputText("##searchSkins", state.search_text_skins)
+            imgui.PopItemWidth()
+            
+            imgui.Text("ID:")
+            imgui.SameLine()
+            imgui.PushItemWidth(60)
+            imgui.InputText("##TargetID_Skins", state.target_id_buf)
+            imgui.PopItemWidth()
+            imgui.SameLine()
+            if imgui.Button("Eu##Skins") then local _,mid=sampGetPlayerIdByCharHandle(PLAYER_PED); state.target_id_buf.v=tostring(mid) end
+
+            imgui.PushID("WinSkins")
+            draw_skins_content(state.search_text_skins.v, true)
+            imgui.PopID()
+        end
+        imgui.End()
+    end
+
+    if state.window_armas.v then
+        imgui.SetNextWindowSize(imgui.ImVec2(400, 300), imgui.Cond.FirstUseEver)
+        if imgui.Begin("Lista de Armas", state.window_armas, imgui.WindowFlags.NoCollapse) then
+            imgui.PushItemWidth(-1)
+            imgui.InputText("##searchArmas", state.search_text_armas)
+            imgui.PopItemWidth()
+
+            imgui.Text("ID:")
+            imgui.SameLine()
+            imgui.PushItemWidth(50)
+            imgui.InputText("##TargetID_Armas", state.target_id_buf)
+            imgui.PopItemWidth()
+            imgui.SameLine()
+            if imgui.Button("Eu##Armas") then local _,mid=sampGetPlayerIdByCharHandle(PLAYER_PED); state.target_id_buf.v=tostring(mid) end
+            
+            imgui.SameLine()
+            imgui.Text("Munição:")
+            imgui.SameLine()
+            imgui.PushItemWidth(60)
+            imgui.InputText("##Ammo_Armas", state.ammo_amount_buf)
+            imgui.PopItemWidth()
+
+            imgui.PushID("WinArmas")
+            draw_weapons_content(state.search_text_armas.v, true)
+            imgui.PopID()
+        end
+        imgui.End()
+    end
+
+    if state.window_profissoes.v then
+        imgui.SetNextWindowSize(imgui.ImVec2(500, 350), imgui.Cond.FirstUseEver)
+        if imgui.Begin("Lista de Profissoes", state.window_profissoes, imgui.WindowFlags.NoCollapse) then
+            imgui.PushItemWidth(-1)
+            imgui.InputText("##searchProf", state.search_text_profissoes)
+            imgui.PopItemWidth()
+            imgui.PushID("WinProf")
+            draw_professions_content(state.search_text_profissoes.v, true)
+            imgui.PopID()
+        end
+        imgui.End()
+    end
 end
 
 -- FUNÇÃO PRINCIPAL E DE TOGGLE
-local function toggle_window() state.window_open.v = not state.window_open.v; imgui.Process = state.window_open.v end
+local function check_process()
+    imgui.Process = state.window_open.v or state.window_duvidas.v or state.window_locais.v or state.window_ferramentas.v or state.window_veiculos.v or state.window_skins.v or state.window_armas.v or state.window_profissoes.v
+end
+
+local function toggle_window() state.window_open.v = not state.window_open.v; check_process() end
 sampRegisterChatCommand("painelinfo", toggle_window); sampRegisterChatCommand("pinfo", toggle_window)
 sampRegisterChatCommand("flogar", start_admin_login)
 sampRegisterChatCommand("pe", function() sampSendChat("/painelevento") end)
@@ -1949,12 +2117,19 @@ sampRegisterChatCommand("admesp", function()
     sampAddChatMessage(esp_active and "[PI] ESP Admin Ativado." or "[PI] ESP Admin Desativado.", -1)
 end)
 sampRegisterChatCommand("verversao", function() check_update(true) end)
+sampRegisterChatCommand("duvidas", function() state.window_duvidas.v = not state.window_duvidas.v; check_process() end)
+sampRegisterChatCommand("locais", function() state.window_locais.v = not state.window_locais.v; check_process() end)
+sampRegisterChatCommand("ferramentas", function() state.window_ferramentas.v = not state.window_ferramentas.v; check_process() end)
+sampRegisterChatCommand("veiculos", function() state.window_veiculos.v = not state.window_veiculos.v; check_process() end)
+sampRegisterChatCommand("skins", function() state.window_skins.v = not state.window_skins.v; check_process() end)
+sampRegisterChatCommand("armas", function() state.window_armas.v = not state.window_armas.v; check_process() end)
+sampRegisterChatCommand("profissoes", function() state.window_profissoes.v = not state.window_profissoes.v; check_process() end)
 sampRegisterChatCommand("limparchat", function()
     for i = 1, 100 do sampAddChatMessage("", -1) end
     sampAddChatMessage("[PainelInfo] Chat limpo localmente.", 0x00FF00)
 end)
 
-function check_update(notify)
+local function check_update(notify)
     local dlstatus = require('moonloader').download_status
     math.randomseed(os.time())
     local temp_path = os.getenv('TEMP') .. '\\painelinfo_ver_' .. os.time() .. '_' .. math.random(1000, 9999) .. '.json'
@@ -2017,5 +2192,7 @@ function main()
         if isKeyDown(vkeys.VK_MENU) and wasKeyPressed(vkeys.VK_L) and not sampIsChatInputActive() and not sampIsDialogActive() then
             start_admin_login()
         end
+
+        check_process() -- Garante que o estado do cursor seja sempre atualizado
     end
 end
