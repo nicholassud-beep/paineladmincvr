@@ -15,8 +15,8 @@ local u8 = function(s) return s and encoding.UTF8(s) or "" end
 
 script_name("PainelInfo")
 script_author("Gerado por ChatGPT (GPT-5 Thinking mini) - Consolidado e Corrigido por Gemini")
-script_version("8.9.73")
-local script_ver_num = 8973
+script_version("8.9.74")
+local script_ver_num = 8974
 script_version_number(script_ver_num)
 
 -- VARIAVEIS DO ADMIN ESP (INTEGRACAO)
@@ -1079,6 +1079,7 @@ end
 -- NOVA FUNÇÃO DE CONFIGURAÇÃO (VISUAL)
 -- =========================================================================
 local update_history = {
+    { version = "8.9.74", date = "03/02/2026", changes = { "Correcao de crash ao verificar atualizacoes (Funcao movida e protegida)." } },
     { version = "8.9.73", date = "03/02/2026", changes = { "Adicionados campos de ID e Municao nas janelas separadas de Skins e Armas." } },
     { version = "8.9.72", date = "03/02/2026", changes = { "Layout das janelas separadas otimizado (Modo Compacto)." } },
     { version = "8.9.71", date = "03/02/2026", changes = { "Janelas redimensionadas para serem mais compactas." } },
@@ -1151,6 +1152,38 @@ local update_history = {
     { version = "8.8.3", date = "15/01/2026", changes = { "Adicionada aba de FAQ/Duvidas.", "Adicionada tabela de limites de transferencia." } },
     { version = "8.8.2", date = "15/01/2026", changes = { "Restauracao completa do codigo.", "Correcao de temas e cores.", "Correcao do botao de backup." } },
 }
+
+-- Forward declaration
+local check_update
+
+check_update = function(notify)
+    local dlstatus = require('moonloader').download_status
+    math.randomseed(os.time())
+    local temp_path = os.getenv('TEMP') .. '\\painelinfo_ver_' .. os.time() .. '_' .. math.random(1000, 9999) .. '.json'
+    downloadUrlToFile("https://raw.githubusercontent.com/nicholassud-beep/paineladmincvr/main/version.json?t="..os.time(), temp_path, function(id, status, p1, p2)
+        if status == dlstatus.STATUS_ENDDOWNLOADDATA then
+            local f = io.open(temp_path, 'r')
+            if f then
+                local content = f:read('*a')
+                f:close()
+                os.remove(temp_path)
+                local ok, info = pcall(decodeJson, content)
+                if ok and info then
+                    local remote_ver = tonumber(info.latest_version_number)
+                    local local_ver = script_ver_num
+                    if remote_ver and remote_ver > local_ver then
+                        sampAddChatMessage("[PainelInfo] Nova versao disponivel: v" .. (info.latest_version_text or "?"), 0xFFFF00)
+                        sampAddChatMessage("[PainelInfo] Acesse o GitHub para baixar a atualizacao.", 0xFFFF00)
+                    elseif notify then
+                        sampAddChatMessage("[PainelInfo] Voce ja esta usando a versao mais recente (v" .. thisScript().version .. ").", 0x00FF00)
+                    end
+                elseif notify then
+                    sampAddChatMessage("[PainelInfo] Erro ao ler informacoes de versao.", 0xFF0000)
+                end
+            end
+        end
+    end)
+end
 
 local function draw_faq_tab(search_buf, suffix, compact)
     if not compact then
@@ -2128,31 +2161,6 @@ sampRegisterChatCommand("limparchat", function()
     for i = 1, 100 do sampAddChatMessage("", -1) end
     sampAddChatMessage("[PainelInfo] Chat limpo localmente.", 0x00FF00)
 end)
-
-local function check_update(notify)
-    local dlstatus = require('moonloader').download_status
-    math.randomseed(os.time())
-    local temp_path = os.getenv('TEMP') .. '\\painelinfo_ver_' .. os.time() .. '_' .. math.random(1000, 9999) .. '.json'
-    -- Adicionado ?t=... para evitar cache do GitHub e garantir leitura atualizada
-    downloadUrlToFile("https://raw.githubusercontent.com/nicholassud-beep/paineladmincvr/main/version.json?t="..os.time(), temp_path, function(id, status, p1, p2)
-        if status == dlstatus.STATUS_ENDDOWNLOADDATA then
-            local f = io.open(temp_path, 'r')
-            if f then
-                local info = decodeJson(f:read('*a'))
-                f:close()
-                os.remove(temp_path)
-                local remote_ver = info and tonumber(info.latest_version_number)
-                local local_ver = script_ver_num
-                if remote_ver and remote_ver > local_ver then
-                    sampAddChatMessage("[PainelInfo] Nova versao disponivel: v" .. (info.latest_version_text or "?"), 0xFFFF00)
-                    sampAddChatMessage("[PainelInfo] Acesse o GitHub para baixar a atualizacao.", 0xFFFF00)
-                elseif notify then
-                    sampAddChatMessage("[PainelInfo] Voce ja esta usando a versao mais recente (v" .. thisScript().version .. ").", 0x00FF00)
-                end
-            end
-        end
-    end)
-end
 
 function main()
     while not isSampfuncsLoaded() do wait(100) end; while not isSampAvailable() do wait(100) end; imgui.Process = state.window_open.v
