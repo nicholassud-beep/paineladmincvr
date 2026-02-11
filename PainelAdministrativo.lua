@@ -5,6 +5,7 @@ require 'lib.moonloader'
 require 'lib.sampfuncs'
 local sampev = require 'lib.samp.events'
 local bit = require 'bit'
+local memory = require 'memory'
 
 local imgui = require 'imgui'
 local vkeys = require 'vkeys'
@@ -13,14 +14,16 @@ encoding.default = 'CP1252'
 local u8 = function(s) return s and encoding.UTF8(s) or "" end
 
 script_name("PainelInfoHelper")
-script_author("Gerado por ChatGPT - Adaptado por Gemini")
-script_version("1.0.90")
-local script_ver_num = 1090
+script_author("Gerado por ChatGPT - Consolidado por Gemini")
+script_version("1.1.38-WallhackFix")
+local script_ver_num = 1138
 script_version_number(script_ver_num)
 
 -- VARIAVEIS DO ADMIN ESP (INTEGRACAO)
 local esp_active = false
+local prof_tags_active = false
 local esp_font = renderCreateFont('Arial', 10, 5) -- Arial 10 com Borda
+local prof_font = nil -- Inicializado apos carregar config
 local esp_spectate_id = -1
 local esp_spectate_vehicle_id = -1
 local weapon_names_esp = {
@@ -94,7 +97,15 @@ local cfg_default = {
         admin_pass = "7N0YU3EuhT",
         bind = 123, -- F12
         auto_cheat = false,
-        check_updates = true
+        check_updates = true,
+        esp_show_prof = true,
+        esp_prof_offset = 0,
+        esp_prof_bg_color = 0xE0000000,
+        esp_side_list = false,
+        esp_side_list_x = 10,
+        esp_side_list_y = 0,
+        esp_side_list_font_size = 7,
+        esp_side_list_show_fist = true
     },
     blacklist = {}
 }
@@ -109,7 +120,17 @@ if not cfg.main.bind then cfg.main.bind = 123 end
 if cfg.main.auto_cheat == nil then cfg.main.auto_cheat = false end
 if cfg.main.check_updates == nil then cfg.main.check_updates = true end
 if not cfg.main.esp_distance then cfg.main.esp_distance = 6000 end
+if cfg.main.esp_show_prof == nil then cfg.main.esp_show_prof = true end
+if not cfg.main.esp_prof_offset then cfg.main.esp_prof_offset = 0 end
+if not cfg.main.esp_prof_bg_color then cfg.main.esp_prof_bg_color = 0xE0000000 end
+if cfg.main.esp_side_list == nil then cfg.main.esp_side_list = false end
+if not cfg.main.esp_side_list_x then cfg.main.esp_side_list_x = 10 end
+if not cfg.main.esp_side_list_y then cfg.main.esp_side_list_y = 0 end
+if not cfg.main.esp_side_list_font_size then cfg.main.esp_side_list_font_size = 7 end
+if cfg.main.esp_side_list_show_fist == nil then cfg.main.esp_side_list_show_fist = true end
 if not cfg.blacklist then cfg.blacklist = {} end
+
+prof_font = renderCreateFont('Arial', cfg.main.esp_side_list_font_size, 5)
 
 -- LISTA DE TEMAS
 local theme_list = {"Padrao", "Claro", "Roxo", "Vermelho", "Verde", "Laranja", "Amarelo", "Escuro"}
@@ -148,6 +169,289 @@ local rank_color_map = {
     Default = imgui.ImVec4(1.0, 0.4, 0.4, 1.0)
 }
 local display_rank_map = { ["Estagiario"] = "Estagiario" }
+
+-- DETECCAO POR COR E HELPERS (MOVIDO PARA CIMA PARA EVITAR ERRO DE UPVALUES)
+local profession_colors_hex = { ["desempregado"] = 0xFFFFFFFF, ["entregador de jornal"] = 0xFFBEF781, ["gari"] = 0xFFB45F04, ["pizzaboy"] = 0xFFFAAC58, ["vendedor de rua"] = 0xFF00EE00, ["operador de empilhadeira"] = 0xFFBDBDBD, ["motoboy"] = 0xFF3CB671, ["leiteiro"] = 0xFFE6E6E6, ["lenhador"] = 0xFFA99C68, ["pescador"] = 0xFF00E2EE, ["correios"] = 0xFFEECA00, ["agente funerario"] = 0xFF863E14, ["fazendeiro"] = 0xFFBFB838, ["mecanico"] = 0xFF8B6969, ["eletricista"] = 0xFFEEDB82, ["meteorologista"] = 0xFF04B45F, ["processador de petroleo"] = 0xFF848484, ["advogado"] = 0xFF751EBC, ["paramedico"] = 0xFF58FAAC, ["transportador"] = 0xFF14A21B, ["motorista de betoneira"] = 0xFF696969, ["motorista de onibus"] = 0xFF0B6138, ["caminhoneiro"] = 0xFF585858, ["taxista"] = 0xFFFCFF00, ["maquinista"] = 0xFFFF8A68, ["motorista de carro forte"] = 0xFFCED8F6, ["piloto"] = 0xFF2A8C9F, ["seguranca de carro forte"] = 0xFFA9D0F5, ["guarda civil metropolitana"] = 0xFF64D4F9, ["policia penal"] = 0xFF00B3EE, ["policia militar"] = 0xFF2E9AFE, ["policia"] = 0xFF2E9AFE, ["policia civil"] = 0xFF2E64FE, ["delegado"] = 0xFF3A60CD, ["policia rodoviaria estadual"] = 0xFF5858FA, ["policia rodoviaria federal"] = 0xFF013ADF, ["policia federal"] = 0xFF3104B4, ["marinha"] = 0xFF2323BB, ["exercito"] = 0xFF2F4F4F, ["aeronautica"] = 0xFF8D840C, ["bombeiro"] = 0xFFFF8000, ["corregedoria"] = 0xFF363D75, ["plantador de maconha"] = 0xFFFFCCCC, ["vendedor de drogas"] = 0xFFFF9999, ["produtor de drogas"] = 0xFFFF6666, ["ladrao de veiculos"] = 0xFFFE4040, ["vendedor de armas"] = 0xFFDE2222, ["contrabandista nautico"] = 0xFFFF0000, ["contrabandista aereo"] = 0xFFFF0000, ["assassino"] = 0xFFC40202, ["assaltante"] = 0xFF990000, ["terrorista"] = 0xFF691313, ["chefao da mafia"] = 0xFF600000 }
+
+local function extract_rgb(argb)
+    local r = bit.band(bit.rshift(argb, 16), 0xFF)
+    local g = bit.band(bit.rshift(argb, 8), 0xFF)
+    local b = bit.band(argb, 0xFF)
+    return r, g, b
+end
+local function capitalize_each_word(str)
+    if not str then return "" end
+    local r = str:gsub("(%a)([%w']*)", function(f, rest) return f:upper() .. rest:lower() end)
+    r = r:gsub(" De ", " de ")
+    return r
+end
+local function get_closest_profession_name(argb)
+    if not argb then return "?" end
+    if argb == 0xFFFFFFFF then return "Desempregado" end
+    local pr, pg, pb = extract_rgb(argb)
+    local min_d = math.huge
+    local key = "Desempregado"
+    for pk, ph in pairs(profession_colors_hex) do
+        local cr, cg, cb = extract_rgb(ph)
+        local dr = pr - cr
+        local dg = pg - cg
+        local db = pb - cb
+        local d = dr * dr + dg * dg + db * db
+        if d < min_d then
+            min_d = d
+            key = pk
+        end
+    end
+    if min_d > 70 * 70 then return "Desempregado" end
+    return capitalize_each_word(key)
+end
+
+local function convert_samp_color(argb)
+    local r = bit.band(bit.rshift(argb, 16), 0xFF)
+    local g = bit.band(bit.rshift(argb, 8), 0xFF)
+    local b = bit.band(argb, 0xFF)
+    return imgui.ImVec4(r / 255, g / 255, b / 255, 1.0)
+end
+
+local function remove_accents(str)
+    if not str then return "" end
+    local s = tostring(str):lower()
+    s = s:gsub("[\224\225\226\227]", "a") -- áàâã
+    s = s:gsub("[\232\233\234]", "e")     -- éê
+    s = s:gsub("[\236\237]", "i")         -- í
+    s = s:gsub("[\242\243\244\245]", "o") -- óôõ
+    s = s:gsub("[\249\250]", "u")         -- ú
+    s = s:gsub("[\231]", "c")             -- ç
+    return s
+end
+
+local function set_nametag_status(enable)
+    local samp = getModuleHandle("samp.dll")
+    if not samp or samp == 0 then return end
+    
+    pcall(function()
+        -- Verifica se e R1 (Offset 0x71428 ou 458280)
+        local is_r1 = false
+        local check_r1_a = memory.read(samp + 0x71428, 1, true)
+        local check_r1_b = memory.read(samp + 458280, 1, true)
+        
+        if (check_r1_a == 0x74 or check_r1_a == 0x90) or (check_r1_b == 0x74 or check_r1_b == 0x90) then
+            is_r1 = true
+        end
+
+        if is_r1 then
+            -- Logica do Wallhack Fix (R1) - Convertida para nativo (memory.fill/write)
+            if enable then
+                -- NOPs (Preenche com 0x90)
+                memory.fill(samp + 457971, 0x90, 6, true)
+                memory.fill(samp + 458004, 0x90, 6, true)
+                memory.fill(samp + 458280, 0x90, 2, true)
+                memory.fill(samp + 462648, 0x90, 2, true)
+                memory.fill(samp + 462372, 0x90, 6, true)
+                sampSetNameTagDrawDistance(cfg.main.esp_distance)
+            else
+                -- Restore (Restaura valores originais)
+                memory.write(samp + 457971, 0x24216591, 4, true)
+                memory.write(samp + 457975, 0x0000, 2, true)
+                memory.write(samp + 458004, 0x22053903, 4, true)
+                memory.write(samp + 458008, 0x0000, 2, true)
+                memory.write(samp + 458280, 0x4074, 2, true)
+                memory.write(samp + 462648, 0x6174, 2, true)
+                memory.write(samp + 462372, 0x24218127, 4, true)
+                memory.write(samp + 462376, 0x0000, 2, true)
+                sampSetNameTagDrawDistance(70.0)
+            end
+            print("[PainelInfoHelper] Wallhack (R1 Fix) " .. (enable and "Ativado" or "Desativado"))
+        else
+            -- Fallback para outras versoes (R2, R3, R4, DL) - Metodo Simples
+            local offsets = {
+                { ver="R2", off=0x714A8, on=0x9090, off_val=0x1D74 },
+                { ver="R3", off=0x75218, on=0x9090, off_val=0x1D74 },
+                { ver="R4", off=0x75948, on=0x9090, off_val=0x1D74 },
+                { ver="DL", off=0x759D8, on=0x9090, off_val=0x1D74 }
+            }
+            
+            local detected = nil
+            for _, item in ipairs(offsets) do
+                local addr = samp + item.off
+                local check = memory.read(addr, 1, true)
+                if check == 0x74 or check == 0x90 then
+                    detected = item
+                    break
+                end
+            end
+            
+            if detected then
+                local addr = samp + detected.off
+                if enable then
+                    memory.write(addr, detected.on, 2, true)
+                    sampSetNameTagDrawDistance(cfg.main.esp_distance)
+                else
+                    memory.write(addr, detected.off_val, 2, true)
+                    sampSetNameTagDrawDistance(70.0)
+                end
+                print("[PainelInfoHelper] Wallhack (" .. detected.ver .. ") " .. (enable and "Ativado" or "Desativado"))
+            else
+                sampAddChatMessage("[PI] Erro: Versao do SAMP nao suportada para Wallhack.", 0xFF0000)
+            end
+        end
+    end)
+end
+
+-- FUNCAO LOGICA DO ESP (MOVIDA PARA CIMA)
+local function draw_esp_logic()
+    if (esp_active or prof_tags_active or cfg.main.esp_side_list) and esp_font and prof_font then
+        local myX, myY, myZ = getCharCoordinates(PLAYER_PED)
+        local camX, camY, camZ = getActiveCameraCoordinates()
+        local sw, sh = getScreenResolution()
+        
+        local render_list = {}
+        for _, handle in ipairs(getAllChars()) do
+            if doesCharExist(handle) and handle ~= PLAYER_PED then
+                local res, id = sampGetPlayerIdByCharHandle(handle)
+                if res and sampIsPlayerConnected(id) then
+                    local x, y, z = getCharCoordinates(handle)
+                    local dist = getDistanceBetweenCoords3d(myX, myY, myZ, x, y, z)
+                    if dist < cfg.main.esp_distance then
+                        local onScreen = isPointOnScreen(x, y, z, 0.0)
+                        if onScreen or cfg.main.esp_side_list then
+                            table.insert(render_list, {handle = handle, id = id, dist = dist, x = x, y = y, z = z, onScreen = onScreen})
+                        end
+                    end
+                end
+            end
+        end
+        
+        table.sort(render_list, function(a, b) return a.dist < b.dist end)
+        
+        local side_list_data = {}
+        
+        for _, item in ipairs(render_list) do
+            local handle = item.handle
+            local id = item.id
+            local x, y, z = item.x, item.y, item.z
+            
+            -- Logica da Lista Lateral (Independente de estar na tela)
+            if cfg.main.esp_side_list then
+                local nick = sampGetPlayerNickname(id) or "Unknown"
+                local rank = staff_nick_to_rank_map[string.lower(nick)]
+                if not rank then
+                    local s, n = pcall(encoding.CP1251, nick)
+                    if s and n then rank = staff_nick_to_rank_map[string.lower(n)] end
+                end
+            
+                if not rank then
+                    local prof_name = get_closest_profession_name(sampGetPlayerColor(id))
+                    if prof_name then
+                        local wep_str = ""
+                        local wep = getCurrentCharWeapon(handle)
+                        if wep and weapon_names_esp[wep] then
+                            if wep > 0 or cfg.main.esp_side_list_show_fist then
+                                wep_str = " [" .. weapon_names_esp[wep] .. "]"
+                            end
+                        end
+                        
+                        table.insert(side_list_data, {id=id, nick=nick, prof=prof_name, color=sampGetPlayerColor(id), dist=item.dist, wep=wep_str})
+                    end
+                end
+            end
+
+            if item.onScreen then
+                local is_visible = true
+                if not esp_active then
+                    is_visible = isLineOfSightClear(camX, camY, camZ, x, y, z + 0.7, true, false, false, true, false)
+                end
+
+                if is_visible then
+                local drawX, drawY, drawZ
+                
+                if isCharInAnyCar(handle) then
+                    local car = getCarCharIsUsing(handle)
+                    if doesVehicleExist(car) then
+                        local cx, cy, cz = getCarCoordinates(car)
+                        drawX, drawY, drawZ = cx, cy, cz + 1.3
+                    else
+                        drawX, drawY, drawZ = x, y, z + 1.3
+                    end
+                else
+                    local res, hx, hy, hz = pcall(getBodyPartCoordinates, handle, 8) -- Bone 8 = Cabeca
+                    if res and hx and hx ~= 0 then
+                        drawX, drawY = hx, hy
+                        drawZ = hz + (esp_active and 0.5 or 0.35)
+                    else
+                        drawX, drawY = x, y
+                        drawZ = z + (esp_active and 2.1 or 1.95)
+                    end
+                end
+                local headX, headY = convert3DCoordsToScreen(drawX, drawY, drawZ)
+                
+                if headX and headY then
+                    local currentY = headY
+
+                                    local nick = sampGetPlayerNickname(id) or "Unknown"
+
+                                    currentY = currentY + (cfg.main.esp_prof_offset or 0)
+
+                                    if (prof_tags_active or (esp_active and cfg.main.esp_show_prof)) and not cfg.main.esp_side_list then
+                                        local rank = staff_nick_to_rank_map[string.lower(nick)]
+                                        if not rank then
+                                            local s, n = pcall(encoding.CP1251, nick)
+                                            if s and n then rank = staff_nick_to_rank_map[string.lower(n)] end
+                                        end
+                                    
+                                        if not rank then
+                                            local prof_name = get_closest_profession_name(sampGetPlayerColor(id))
+                                            
+                                            if prof_name then
+                                                    local lines = {}
+                                                    table.insert(lines, string.format("[%d] %s", id, prof_name))
+                                                    
+                                                    if #lines > 0 then
+                                                        local maxW = 0
+                                                        for _, l in ipairs(lines) do local w = renderGetFontDrawTextLength(prof_font, l); if w > maxW then maxW = w end end
+                                                        local totalH = #lines * 10
+                                                
+                                                local pColor = sampGetPlayerColor(id)
+                                                if pColor == 0 then pColor = 0xFFFFFFFF end
+                                                pColor = bit.bor(pColor, 0xFF000000)
+
+                                                for i, l in ipairs(lines) do
+                                                    local w = renderGetFontDrawTextLength(prof_font, l)
+                                                    renderFontDrawText(prof_font, l, headX - (w / 2), currentY + ((i-1)*10), pColor)
+                                                end
+                                                currentY = currentY + totalH + 2
+                                            end
+                                        end
+                                    end
+                                end
+                end
+                end
+            end
+        end
+        
+        if #side_list_data > 0 then
+            local startX = cfg.main.esp_side_list_x or 10
+            local startY = (sh / 2 - (#side_list_data * 14) / 2) + (cfg.main.esp_side_list_y or 0)
+            local maxW = 0
+            for _, item in ipairs(side_list_data) do
+                local text = string.format("[%d] %s - %s%s (%.0fm)", item.id, item.nick, item.prof, item.wep or "", item.dist)
+                local w = renderGetFontDrawTextLength(prof_font, text)
+                if w > maxW then maxW = w end
+            end
+            
+            renderDrawBox(startX, startY - 5, maxW + 10, #side_list_data * 14 + 10, 0x80000000)
+            
+            for i, item in ipairs(side_list_data) do
+                local text = string.format("[%d] %s - %s%s (%.0fm)", item.id, item.nick, item.prof, item.wep or "", item.dist)
+                local pColor = item.color
+                if pColor == 0 then pColor = 0xFFFFFFFF end
+                pColor = bit.bor(pColor, 0xFF000000)
+                
+                renderFontDrawText(prof_font, text, startX + 5, startY + (i-1)*14, pColor)
+            end
+        end
+    end
+end
 
 local vehicles = { {id = 417, name = "Leviathan", price = 230000, speed = 153, type = "Aereo"}, {id = 469, name = "Sparrow", price = 180000, speed = 132, type = "Aereo"}, {id = 487, name = "Maverick", price = 220000, speed = 179, type = "Aereo"}, {id = 511, name = "Beagle", price = 200000, speed = 130, type = "Aereo"}, {id = 607, name = "Cropduster", price = 130000, speed = 125, type = "Aereo"}, {id = 513, name = "Stuntplane", price = 160000, speed = 149, type = "Aereo"}, {id = 519, name = "Shamal", price = 1500000, speed = 272, type = "Aereo"}, {id = 592, name = "Dodo", price = 100000, speed = 145, type = "Aereo"}, {id = 460, name = "Skimmer", price = 105000, speed = 144, type = "Aereo/Nautico"}, {id = 593, name = "Andromada", price = 0, speed = 272, type = "Aereo"}, {id = 594, name = "Nevada", price = 0, speed = 198, type = "Aereo"}, {id = 520, name = "Hydra", price = 0, speed = 272, type = "Aereo"}, {id = 548, name = "Cargobob", price = 0, speed = 158, type = "Aereo"}, {id = 563, name = "Raindance", price = 0, speed = 163, type = "Aereo"}, {id = 425, name = "Hunter", price = 0, speed = 210, type = "Aereo"}, {id = 446, name = "Squalo", price = 220000, speed = 243, type = "Nautico"}, {id = 452, name = "Speeder", price = 180000, speed = 235, type = "Nautico"}, {id = 454, name = "Tropic", price = 300000, speed = 132, type = "Nautico"}, {id = 473, name = "Dinghy", price = 10000, speed = 106, type = "Nautico"}, {id = 484, name = "Marquis", price = 230000, speed = 62, type = "Nautico"}, {id = 493, name = "Jetmax", price = 240000, speed = 181, type = "Nautico"}, {id = 539, name = "Vortex", price = 250000, speed = 100, type = "Nautico/Terrestre"}, {id = 453, name = "Reefer", price = 0, speed = 54, type = "Nautico"}, {id = 430, name = "Predator", price = 0, speed = 186, type = "Nautico"}, {id = 400, name = "Landstalker", price = 45000, speed = 159, type = "Terrestre"}, {id = 401, name = "Bravura", price = 20000, speed = 148, type = "Terrestre"}, {id = 402, name = "Buffalo", price = 25000, speed = 187, type = "Terrestre"}, {id = 403, name = "Linerunner", price = 220000, speed = 111, type = "Terrestre"}, {id = 404, name = "Perennial", price = 28000, speed = 133, type = "Terrestre"}, {id = 405, name = "Sentinel", price = 23000, speed = 165, type = "Terrestre"}, {id = 408, name = "Trashmaster", price = 60000, speed = 100, type = "Terrestre"}, {id = 409, name = "Stretch", price = 110000, speed = 159, type = "Terrestre"}, {id = 410, name = "Manana", price = 16000, speed = 130, type = "Terrestre"}, {id = 411, name = "Infernus", price = 200000, speed = 223, type = "Terrestre"}, {id = 412, name = "Voodoo", price = 42000, speed = 169, type = "Terrestre"}, {id = 413, name = "Pony", price = 50000, speed = 111, type = "Terrestre"}, {id = 414, name = "Mule", price = 55000, speed = 106, type = "Terrestre"}, {id = 415, name = "Cheetah", price = 40000, speed = 193, type = "Terrestre"}, {id = 418, name = "Moonbeam", price = 61000, speed = 116, type = "Terrestre"}, {id = 419, name = "Esperanto", price = 34000, speed = 150, type = "Terrestre"}, {id = 421, name = "Washington", price = 28000, speed = 154, type = "Terrestre"}, {id = 422, name = "Bobcat", price = 42000, speed = 141, type = "Terrestre"}, {id = 424, name = "BF Injection", price = 12000, speed = 136, type = "Terrestre"}, {id = 426, name = "Premier", price = 19000, speed = 174, type = "Terrestre"}, {id = 429, name = "Banshee", price = 50000, speed = 203, type = "Terrestre"}, {id = 431, name = "Bus", price = 330000, speed = 131, type = "Terrestre"}, {id = 434, name = "Hotknife", price = 53000, speed = 168, type = "Terrestre"}, {id = 436, name = "Previon", price = 22000, speed = 150, type = "Terrestre"}, {id = 437, name = "Coach", price = 350000, speed = 158, type = "Terrestre"}, {id = 439, name = "Stallion", price = 21000, speed = 169, type = "Terrestre"}, {id = 440, name = "Rumpo", price = 38000, speed = 137, type = "Terrestre"}, {id = 442, name = "Romero", price = 18000, speed = 140, type = "Terrestre"}, {id = 443, name = "Packer", price = 150000, speed = 124, type = "Terrestre"}, {id = 444, name = "Monster", price = 81000, speed = 111, type = "Terrestre"}, {id = 445, name = "Admiral", price = 15000, speed = 165, type = "Terrestre"}, {id = 451, name = "Turismo", price = 190000, speed = 194, type = "Terrestre"}, {id = 455, name = "Flatbed", price = 80000, speed = 158, type = "Terrestre"}, {id = 456, name = "Yankee", price = 70000, speed = 106, type = "Terrestre"}, {id = 458, name = "Solair", price = 32000, speed = 158, type = "Terrestre"}, {id = 459, name = "Berkleys RC Van", price = 48000, speed = 137, type = "Terrestre"}, {id = 461, name = "PCJ-600", price = 15000, speed = 162, type = "Terrestre"}, {id = 462, name = "Faggio", price = 4000, speed = 111, type = "Terrestre"}, {id = 463, name = "Freeway", price = 50000, speed = 104, type = "Terrestre"}, {id = 466, name = "Glendale", price = 34000, speed = 148, type = "Terrestre"}, {id = 467, name = "Oceanic", price = 38000, speed = 141, type = "Terrestre"}, {id = 468, name = "Sanchez", price = 8000, speed = 145, type = "Terrestre"}, {id = 471, name = "Quad", price = 10000, speed = 110, type = "Terrestre"}, {id = 474, name = "Hermes", price = 33000, speed = 150, type = "Terrestre"}, {id = 475, name = "Sabre", price = 30000, speed = 174, type = "Terrestre"}, {id = 477, name = "ZR-350", price = 150000, speed = 187, type = "Terrestre"}, {id = 478, name = "Walton", price = 32000, speed = 118, type = "Terrestre"}, {id = 479, name = "Regina", price = 28000, speed = 141, type = "Terrestre"}, {id = 480, name = "Comet", price = 20000, speed = 185, type = "Terrestre"}, {id = 481, name = "BMX", price = 500, speed = 97, type = "Terrestre"}, {id = 482, name = "Burrito", price = 58000, speed = 157, type = "Terrestre"}, {id = 483, name = "Camper", price = 28000, speed = 123, type = "Terrestre"}, {id = 489, name = "Rancher", price = 54000, speed = 140, type = "Terrestre"}, {id = 491, name = "Virgo", price = 38000, speed = 150, type = "Terrestre"}, {id = 492, name = "Greenwood", price = 31000, speed = 141, type = "Terrestre"}, {id = 494, name = "Hotring Racer", price = 160000, speed = 216, type = "Terrestre"}, {id = 495, name = "Sandking", price = 83000, speed = 177, type = "Terrestre"}, {id = 496, name = "Blista Compact", price = 16000, speed = 163, type = "Terrestre"}, {id = 498, name = "Boxville", price = 68000, speed = 108, type = "Terrestre"}, {id = 499, name = "Benson", price = 56000, speed = 123, type = "Terrestre"}, {id = 500, name = "Mesa", price = 40000, speed = 141, type = "Terrestre"}, {id = 502, name = "Hotring Racer 2", price = 162000, speed = 216, type = "Terrestre"}, {id = 503, name = "Hotring Racer 3", price = 164000, speed = 216, type = "Terrestre"}, {id = 504, name = "Bloodring Banger", price = 30000, speed = 174, type = "Terrestre"}, {id = 505, name = "Rancher", price = 52000, speed = 140, type = "Terrestre"}, {id = 506, name = "Super GT", price = 80000, speed = 180, type = "Terrestre"}, {id = 507, name = "Elegant", price = 29000, speed = 167, type = "Terrestre"}, {id = 508, name = "Journey", price = 110000, speed = 108, type = "Terrestre"}, {id = 509, name = "Bike", price = 300, speed = 105, type = "Terrestre"}, {id = 510, name = "Mountain Bike", price = 800, speed = 130, type = "Terrestre"}, {id = 514, name = "Tanker", price = 210000, speed = 121, type = "Terrestre"}, {id = 515, name = "Roadtrain", price = 230000, speed = 143, type = "Terrestre"}, {id = 516, name = "Nebula", price = 20000, speed = 158, type = "Terrestre"}, {id = 517, name = "Majestic", price = 22000, speed = 158, type = "Terrestre"}, {id = 518, name = "Buccaneer", price = 31000, speed = 165, type = "Terrestre"}, {id = 521, name = "FCR-900", price = 20000, speed = 162, type = "Terrestre"}, {id = 522, name = "NRG-500", price = 80000, speed = 178, type = "Terrestre"}, {id = 524, name = "Cement Truck", price = 84000, speed = 131, type = "Terrestre"}, {id = 525, name = "Towtruck", price = 66000, speed = 161, type = "Terrestre"}, {id = 526, name = "Fortune", price = 20000, speed = 158, type = "Terrestre"}, {id = 527, name = "Cadrona", price = 19000, speed = 150, type = "Terrestre"}, {id = 529, name = "Willard", price = 23000, speed = 150, type = "Terrestre"}, {id = 533, name = "Feltzer", price = 22000, speed = 168, type = "Terrestre"}, {id = 534, name = "Remington", price = 48000, speed = 169, type = "Terrestre"}, {id = 535, name = "Slamvan", price = 64000, speed = 159, type = "Terrestre"}, {id = 536, name = "Blade", price = 32000, speed = 174, type = "Terrestre"}, {id = 540, name = "Vincent", price = 25000, speed = 150, type = "Terrestre"}, {id = 541, name = "Bullet", price = 180000, speed = 204, type = "Terrestre"}, {id = 542, name = "Clover", price = 12000, speed = 165, type = "Terrestre"}, {id = 543, name = "Sadler", price = 31000, speed = 151, type = "Terrestre"}, {id = 545, name = "Hustler", price = 47000, speed = 148, type = "Terrestre"}, {id = 546, name = "Intruder", price = 28000, speed = 150, type = "Terrestre"}, {id = 547, name = "Primo", price = 20000, speed = 143, type = "Terrestre"}, {id = 549, name = "Tampa", price = 18000, speed = 154, type = "Terrestre"}, {id = 550, name = "Sunrise", price = 38000, speed = 145, type = "Terrestre"}, {id = 551, name = "Merit", price = 30000, speed = 158, type = "Terrestre"}, {id = 554, name = "Yosemite", price = 45000, speed = 144, type = "Terrestre"}, {id = 555, name = "Windsor", price = 60000, speed = 159, type = "Terrestre"}, {id = 556, name = "Monster A", price = 85000, speed = 111, type = "Terrestre"}, {id = 557, name = "Monster B", price = 88000, speed = 111, type = "Terrestre"}, {id = 558, name = "Uranus", price = 33000, speed = 157, type = "Terrestre"}, {id = 559, name = "Jester", price = 24000, speed = 179, type = "Terrestre"}, {id = 560, name = "Sultan", price = 53000, speed = 170, type = "Terrestre"}, {id = 561, name = "Stratum", price = 33000, speed = 155, type = "Terrestre"}, {id = 562, name = "Elegy", price = 62000, speed = 179, type = "Terrestre"}, {id = 565, name = "Flash", price = 30000, speed = 166, type = "Terrestre"}, {id = 566, name = "Tahoma", price = 26000, speed = 161, type = "Terrestre"}, {id = 567, name = "Savanna", price = 50000, speed = 174, type = "Terrestre"}, {id = 568, name = "Bandito", price = 18000, speed = 147, type = "Terrestre"}, {id = 571, name = "Kart", price = 14000, speed = 93, type = "Terrestre"}, {id = 573, name = "Dune", price = 140000, speed = 111, type = "Terrestre"}, {id = 575, name = "Broadway", price = 28000, speed = 158, type = "Terrestre"}, {id = 576, name = "Tornado", price = 45000, speed = 158, type = "Terrestre"}, {id = 578, name = "DFT-30", price = 112000, speed = 131, type = "Terrestre"}, {id = 579, name = "Huntley", price = 30000, speed = 158, type = "Terrestre"}, {id = 580, name = "Stafford", price = 30000, speed = 154, type = "Terrestre"}, {id = 581, name = "BF-400", price = 18000, speed = 152, type = "Terrestre"}, {id = 585, name = "Emperor", price = 27000, speed = 154, type = "Terrestre"}, {id = 586, name = "Wayfarer", price = 25000, speed = 145, type = "Terrestre"}, {id = 587, name = "Euros", price = 43000, speed = 166, type = "Terrestre"}, {id = 589, name = "Club", price = 30000, speed = 163, type = "Terrestre"}, {id = 600, name = "Picador", price = 38000, speed = 152, type = "Terrestre"}, {id = 602, name = "Alpha", price = 53000, speed = 170, type = "Terrestre"}, {id = 603, name = "Phoenix", price = 82000, speed = 172, type = "Terrestre"}, {id = 609, name = "Boxville", price = 72000, speed = 108, type = "Terrestre"}, {id = 457, name = "Caddy", price = 0, speed = 95, type = "Terrestre"}, {id = 531, name = "Tractor", price = 0, speed = 70, type = "Terrestre"}, {id = 532, name = "Combine Harvester", price = 0, speed = 111, type = "Terrestre"}, {id = 552, name = "Utility Van", price = 0, speed = 122, type = "Terrestre"}, {id = 428, name = "Securicar", price = 0, speed = 157, type = "Terrestre"}, {id = 448, name = "Pizzaboy", price = 0, speed = 143, type = "Terrestre"}, {id = 438, name = "Cabbie", price = 0, speed = 111, type = "Terrestre"}, {id = 420, name = "Taxi", price = 0, speed = 146, type = "Terrestre"}, {id = 490, name = "FBI Rancher", price = 0, speed = 158, type = "Terrestre"}, {id = 427, name = "Enforcer", price = 0, speed = 166, type = "Terrestre"}, {id = 596, name = "Police LS", price = 0, speed = 176, type = "Terrestre"}, {id = 597, name = "Police SF", price = 0, speed = 176, type = "Terrestre"}, {id = 598, name = "Police LV", price = 0, speed = 176, type = "Terrestre"}, {id = 523, name = "HPV1000", price = 0, speed = 152, type = "Terrestre"}, {id = 528, name = "FBI Truck", price = 0, speed = 178, type = "Terrestre"}, {id = 601, name = "S.W.A.T.", price = 0, speed = 111, type = "Terrestre"}, {id = 599, name = "Police Ranger", price = 0, speed = 159, type = "Terrestre"}, {id = 416, name = "Ambulance", price = 0, speed = 154, type = "Terrestre"}, {id = 407, name = "Fire Truck", price = 0, speed = 149, type = "Terrestre"}, {id = 512, name = "Freight", price = 0, speed = 181, type = "Terrestre"}, {id = 530, name = "Forklift", price = 0, speed = 60, type = "Terrestre"}, {id = 432, name = "Rhino", price = 0, speed = 94, type = "Terrestre"}, {id = 470, name = "Patriot", price = 0, speed = 158, type = "Terrestre"}, {id = 433, name = "Barracks", price = 0, speed = 111, type = "Terrestre"}, }
 local profession_vehicles_map = {
@@ -218,6 +522,132 @@ local faq_list = {
 }
 
 local changelog_list = {
+    { version = "1.1.38", date = "11/02/2026", changes = {
+        "Melhoria: Implementado novo sistema de Wallhack (Tags nativas do SAMP via memoria).",
+    }},
+    { version = "1.1.37", date = "10/02/2026", changes = {
+        "Limpeza: Removido codigo residual do ESP.",
+    }},
+    { version = "1.1.34", date = "08/02/2026", changes = {
+        "Correcao: Removida restricao de 'Punhos' na lista lateral (Mostra arma 0).",
+    }},
+    { version = "1.1.33", date = "08/02/2026", changes = {
+        "Correcao: Adicionada deteccao de arma na lista lateral (Igual ao ESP).",
+    }},
+    { version = "1.1.29", date = "08/02/2026", changes = {
+        "Melhoria: Adicionada opcao de tamanho da fonte na lista lateral.",
+    }},
+    { version = "1.1.28", date = "08/02/2026", changes = {
+        "Correcao: Lista lateral agora funciona mesmo com ESP/Tags desligados.",
+    }},
+    { version = "1.1.27", date = "08/02/2026", changes = {
+        "Melhoria: Lista lateral agora e movel (X/Y) e independente das tags.",
+    }},
+    { version = "1.1.26", date = "08/02/2026", changes = {
+        "Melhoria: Lista lateral de profissoes agora mostra jogadores fora da tela.",
+    }},
+    { version = "1.1.25", date = "08/02/2026", changes = {
+        "Melhoria: Auto-Login agora aguarda o dialogo (mais confiavel).",
+    }},
+    { version = "1.1.24", date = "08/02/2026", changes = {
+        "Correcao: Erro 'function has more than 60 upvalues' (Reorganizacao de codigo).",
+    }},
+    { version = "1.1.23", date = "08/02/2026", changes = {
+        "Adicionada opcao de Lista Lateral para tags de profissao (Menu Config).",
+    }},
+    { version = "1.1.22", date = "08/02/2026", changes = {
+        "Melhoria: Tag em veiculos agora fica acima do carro (Alinhado ao SAMP).",
+    }},
+    { version = "1.1.21", date = "08/02/2026", changes = {
+        "Removido fundo (faixa) da tag de profissao (Solicitado).",
+    }},
+    { version = "1.1.20", date = "08/02/2026", changes = {
+        "Melhoria: Tag de profissao agora usa a cor da profissao (Player Color).",
+    }},
+    { version = "1.1.19", date = "08/02/2026", changes = {
+        "Correcao: Erro de sintaxe (end extra) no ESP.",
+    }},
+    { version = "1.1.18", date = "08/02/2026", changes = {
+        "Adicionado sistema anti-sobreposicao (Tags nao se misturam em veiculos).",
+    }},
+    { version = "1.1.17", date = "08/02/2026", changes = {
+        "Ajuste fino na altura da tag (Mais proxima da cabeca/barra de vida).",
+    }},
+    { version = "1.1.16", date = "08/02/2026", changes = {
+        "Correcao: Protecao contra crash no getBodyPartCoordinates (Bone).",
+    }},
+    { version = "1.1.15", date = "08/02/2026", changes = {
+        "Correcao: Erro critico no ESP (Validacao de cor e fonte).",
+    }},
+    { version = "1.1.14", date = "08/02/2026", changes = {
+        "Melhoria: Tag agora segue a cabeca do jogador (Bone) para evitar desvios.",
+    }},
+    { version = "1.1.13", date = "08/02/2026", changes = {
+        "Correcao: Erro ao selecionar cor (acesso incorreto a variavel ImFloat4).",
+    }},
+    { version = "1.1.12", date = "08/02/2026", changes = {
+        "Correcao: Removida funcao incompativel (IsItemDeactivatedAfterEdit) que causava crash.",
+    }},
+    { version = "1.1.11", date = "08/02/2026", changes = {
+        "Correcao: Crash ao abrir aba Comandos (Protecao na cor da tag).",
+    }},
+    { version = "1.1.10", date = "08/02/2026", changes = {
+        "Correcao: Crash ao editar cor da tag (Salvamento otimizado).",
+    }},
+    { version = "1.1.09", date = "08/02/2026", changes = {
+        "Adicionada opcao para alterar a cor de fundo da tag de profissao.",
+    }},
+    { version = "1.1.08", date = "08/02/2026", changes = {
+        "Correcao critica: Crash ao ativar ESP (Variavel incorreta na barra de vida).",
+    }},
+    { version = "1.1.07", date = "08/02/2026", changes = {
+        "Correcao: Tag sumia ao entrar em veiculos (Line of Sight ignorando veiculos).",
+    }},
+    { version = "1.1.06", date = "08/02/2026", changes = {
+        "Adicionada verificacao de parede (Line of Sight) quando ESP esta desligado.",
+    }},
+    { version = "1.1.05", date = "08/02/2026", changes = {
+        "Ajuste automatico da posicao da tag quando ESP esta desligado (Alinhado ao SAMP).",
+    }},
+    { version = "1.1.04", date = "08/02/2026", changes = {
+        "Adicionado slider para ajustar altura da tag de profissao.",
+    }},
+    { version = "1.1.03", date = "08/02/2026", changes = {
+        "Ajuste na posicao da tag de profissao (Mais abaixo do colete).",
+    }},
+    { version = "1.1.02", date = "08/02/2026", changes = {
+        "Removida exibicao de tag de profissao/cargo para Admins (Solicitado).",
+    }},
+    { version = "1.1.01", date = "08/02/2026", changes = {
+        "Adicionado ID na tag de profissao e suporte a profissao dupla (Staff + Cor).",
+    }},
+    { version = "1.0.99", date = "08/02/2026", changes = {
+        "Melhoria na exibicao da profissao no ESP (Fundo escuro para evitar sobreposicao).",
+    }},
+    { version = "1.0.98", date = "08/02/2026", changes = {
+        "Tag de profissao movida para baixo do HP (centralizada).",
+    }},
+    { version = "1.0.97", date = "08/02/2026", changes = {
+        "Ajuste visual nas tags de profissao (fonte menor e mais discreta).",
+    }},
+    { version = "1.0.96", date = "08/02/2026", changes = {
+        "Habilitado ESP/Tags no jogador que voce esta espiando (Spectate).",
+    }},
+    { version = "1.0.95", date = "08/02/2026", changes = {
+        "Tag de profissao movida para o lado do personagem (mais discreta).",
+    }},
+    { version = "1.0.94", date = "07/02/2026", changes = {
+        "Correcao: ESP/Tags agora aparecem sempre (mesmo proximo e visivel).",
+    }},
+    { version = "1.0.93", date = "07/02/2026", changes = {
+        "Separada a funcao de ver profissao do ESP (Tags de Profissao).",
+    }},
+    { version = "1.0.92", date = "07/02/2026", changes = {
+        "Adicionada opcao para desativar tag de profissao no ESP.",
+    }},
+    { version = "1.0.91", date = "07/02/2026", changes = {
+        "Adicionado profissao/cargo no ESP (Tag no jogador).",
+    }},
     { version = "1.0.90", date = "06/02/2026", changes = {
         "Adicionado aba Changelog.",
         "Correção na aba Novatos/Online (contadores).",
@@ -291,61 +721,6 @@ local IMAGE_WHITE = imgui.ImVec4(1, 1, 1, 1)
 local IMAGE_GREY = imgui.ImVec4(0.5, 0.5, 0.5, 1)
 local IMAGE_PINK = imgui.ImVec4(1, 0.4, 0.8, 1)
 local IMAGE_BLACK = imgui.ImVec4(0, 0, 0, 1)
-
--- DETECCAO POR COR
-local profession_colors_hex = { ["desempregado"] = 0xFFFFFFFF, ["entregador de jornal"] = 0xFFBEF781, ["gari"] = 0xFFB45F04, ["pizzaboy"] = 0xFFFAAC58, ["vendedor de rua"] = 0xFF00EE00, ["operador de empilhadeira"] = 0xFFBDBDBD, ["motoboy"] = 0xFF3CB671, ["leiteiro"] = 0xFFE6E6E6, ["lenhador"] = 0xFFA99C68, ["pescador"] = 0xFF00E2EE, ["correios"] = 0xFFEECA00, ["agente funerario"] = 0xFF863E14, ["fazendeiro"] = 0xFFBFB838, ["mecanico"] = 0xFF8B6969, ["eletricista"] = 0xFFEEDB82, ["meteorologista"] = 0xFF04B45F, ["processador de petroleo"] = 0xFF848484, ["advogado"] = 0xFF751EBC, ["paramedico"] = 0xFF58FAAC, ["transportador"] = 0xFF14A21B, ["motorista de betoneira"] = 0xFF696969, ["motorista de onibus"] = 0xFF0B6138, ["caminhoneiro"] = 0xFF585858, ["taxista"] = 0xFFFCFF00, ["maquinista"] = 0xFFFF8A68, ["motorista de carro forte"] = 0xFFCED8F6, ["piloto"] = 0xFF2A8C9F, ["seguranca de carro forte"] = 0xFFA9D0F5, ["guarda civil metropolitana"] = 0xFF64D4F9, ["policia penal"] = 0xFF00B3EE, ["policia militar"] = 0xFF2E9AFE, ["policia"] = 0xFF2E9AFE, ["policia civil"] = 0xFF2E64FE, ["delegado"] = 0xFF3A60CD, ["policia rodoviaria estadual"] = 0xFF5858FA, ["policia rodoviaria federal"] = 0xFF013ADF, ["policia federal"] = 0xFF3104B4, ["marinha"] = 0xFF2323BB, ["exercito"] = 0xFF2F4F4F, ["aeronautica"] = 0xFF8D840C, ["bombeiro"] = 0xFFFF8000, ["corregedoria"] = 0xFF363D75, ["plantador de maconha"] = 0xFFFFCCCC, ["vendedor de drogas"] = 0xFFFF9999, ["produtor de drogas"] = 0xFFFF6666, ["ladrao de veiculos"] = 0xFFFE4040, ["vendedor de armas"] = 0xFFDE2222, ["contrabandista nautico"] = 0xFFFF0000, ["contrabandista aereo"] = 0xFFFF0000, ["assassino"] = 0xFFC40202, ["assaltante"] = 0xFF990000, ["terrorista"] = 0xFF691313, ["chefao da mafia"] = 0xFF600000 }
-
-local function extract_rgb(argb)
-    local r = bit.band(bit.rshift(argb, 16), 0xFF)
-    local g = bit.band(bit.rshift(argb, 8), 0xFF)
-    local b = bit.band(argb, 0xFF)
-    return r, g, b
-end
-local function capitalize_each_word(str)
-    if not str then return "" end
-    local r = str:gsub("(%a)([%w']*)", function(f, rest) return f:upper() .. rest:lower() end)
-    r = r:gsub(" De ", " de ")
-    return r
-end
-local function get_closest_profession_name(argb)
-    if not argb then return "?" end
-    if argb == 0xFFFFFFFF then return "Desempregado" end
-    local pr, pg, pb = extract_rgb(argb)
-    local min_d = math.huge
-    local key = "Desempregado"
-    for pk, ph in pairs(profession_colors_hex) do
-        local cr, cg, cb = extract_rgb(ph)
-        local dr = pr - cr
-        local dg = pg - cg
-        local db = pb - cb
-        local d = dr * dr + dg * dg + db * db
-        if d < min_d then
-            min_d = d
-            key = pk
-        end
-    end
-    if min_d > 70 * 70 then return "Desempregado" end
-    return capitalize_each_word(key)
-end
-
-local function convert_samp_color(argb)
-    local r = bit.band(bit.rshift(argb, 16), 0xFF)
-    local g = bit.band(bit.rshift(argb, 8), 0xFF)
-    local b = bit.band(argb, 0xFF)
-    return imgui.ImVec4(r / 255, g / 255, b / 255, 1.0)
-end
-
-local function remove_accents(str)
-    if not str then return "" end
-    local s = tostring(str):lower()
-    s = s:gsub("[\224\225\226\227]", "a") -- áàâã
-    s = s:gsub("[\232\233\234]", "e")     -- éê
-    s = s:gsub("[\236\237]", "i")         -- í
-    s = s:gsub("[\242\243\244\245]", "o") -- óôõ
-    s = s:gsub("[\249\250]", "u")         -- ú
-    s = s:gsub("[\231]", "c")             -- ç
-    return s
-end
 
 local function draw_player_header()
     local idw=35; local nickw=130; local profw=150; local lvlw=40; local pingw=110
@@ -521,85 +896,6 @@ local function filter_interiors(l, t)
     end
     pcall(table.sort, f, function(a, b) return (a.id or -1) < (b.id or -1) end)
     return f
-end
-
--- FUNCAO LOGICA DO ESP (DESENHO NA TELA)
-local function draw_esp_logic()
-    if esp_active and esp_font then
-        local myX, myY, myZ = getCharCoordinates(PLAYER_PED)
-        
-        for _, handle in ipairs(getAllChars()) do
-            if doesCharExist(handle) and handle ~= PLAYER_PED then
-                local res, id = sampGetPlayerIdByCharHandle(handle)
-                if res and sampIsPlayerConnected(id) then
-                    -- Protecao de Spectate (Nao mostrar quem voce esta telando)
-                    local skip = false
-                    if esp_spectate_id ~= -1 and id == esp_spectate_id then skip = true end
-                    if not skip and esp_spectate_vehicle_id ~= -1 and isCharInAnyCar(handle) then
-                        local car = getCarCharIsUsing(handle)
-                        local res, carId = sampGetVehicleIdByCarHandle(car)
-                        if res and carId == esp_spectate_vehicle_id then skip = true end
-                    end
-
-                    if not skip then
-                        local x, y, z = getCharCoordinates(handle)
-                        
-                        -- Verifica se esta no campo de visao
-                        if isPointOnScreen(x, y, z, 0.0) then
-                            local dist = getDistanceBetweenCoords3d(myX, myY, myZ, x, y, z)
-                            
-                            -- Verifica barreiras
-                            local checkVeh = true
-                            if isCharInAnyCar(handle) then checkVeh = false end
-                            local camX, camY, camZ = getActiveCameraCoordinates()
-                            local visible = isLineOfSightClear(camX, camY, camZ, x, y, z + 0.7, true, checkVeh, false, true, false)
-                            
-                            -- Wallhack ou Distancia > 65m
-                            if dist < cfg.main.esp_distance and (not visible or dist > 65) then
-                                local headX, headY = convert3DCoordsToScreen(x, y, z + 2.6)
-                                
-                                if headX and headY then
-                                    local nick = sampGetPlayerNickname(id) or "Unknown"
-                                    local hp = getCharHealth(handle)
-                                    local armor = getCharArmour(handle)
-                                    if hp > 100 then hp = 100 end; if hp < 0 then hp = 0 end; if armor > 100 then armor = 100 end
-                                    
-                                    local pColor = sampGetPlayerColor(id)
-                                    if pColor == 0 then pColor = 0xFFFFFFFF end
-                                    pColor = bit.bor(pColor, 0xFF000000)
-                                    
-                                    local text = string.format("%s (%d)", nick, id)
-                                    local textLen = renderGetFontDrawTextLength(esp_font, text)
-                                    local textX = headX - (textLen / 2); local textY = headY
-                                    renderFontDrawText(esp_font, text, textX, textY, pColor)
-                                    
-                                    local barW = 40; local barH = 5; local barX = headX - (barW / 2); local barY = textY + 15
-                                    renderDrawBox(barX - 1, barY - 1, barW + 2, barH + 2, 0xFF000000)
-                                    if hp > 0 then local hpW = barW * (hp / 100); renderDrawBox(barX, barY, hpW, barH, 0xFFB92228) end
-
-                                    local nextY = barY + barH + 3
-                                    if armor > 0 then
-                                        local armY = nextY
-                                        renderDrawBox(barX - 1, armY - 1, barW + 2, barH + 2, 0xFF000000)
-                                        local armW = barW * (armor / 100)
-                                        renderDrawBox(barX, armY, armW, barH, 0xFFF5F5F5)
-                                        nextY = armY + barH + 2
-                                    end
-
-                                    local wep = getCurrentCharWeapon(handle)
-                                    if wep and wep > 0 and weapon_names_esp[wep] then
-                                        local wname = weapon_names_esp[wep]
-                                        local wLen = renderGetFontDrawTextLength(esp_font, wname)
-                                        renderFontDrawText(esp_font, wname, headX - (wLen / 2), nextY, 0xFFFFFFFF)
-                                    end
-                                end
-                            end
-                        end
-                    end
-                end
-            end
-        end
-    end
 end
 
 local function getPlayerId(arg)
@@ -1165,14 +1461,89 @@ local function draw_comandos_tab()
 
     if imgui.Button(esp_active and "Desativar ESP" or "Ativar ESP", imgui.ImVec2(150, 30)) then
         esp_active = not esp_active
-        sampAddChatMessage(esp_active and "[PI] ESP Admin Ativado." or "[PI] ESP Admin Desativado.", -1)
+        set_nametag_status(esp_active)
+        sampAddChatMessage(esp_active and "[PI] ESP Admin Ativado (SAMP Tags)." or "[PI] ESP Admin Desativado.", -1)
     end
     imgui.SameLine(); imgui.Text("Wallhack de nome/vida/colete (Estilo SA-MP).")
     
+    if imgui.Button(prof_tags_active and "Desativar Tags Profissao" or "Ativar Tags Profissao", imgui.ImVec2(150, 30)) then
+        prof_tags_active = not prof_tags_active
+        sampAddChatMessage(prof_tags_active and "[PI] Tags de Profissao Ativadas." or "[PI] Tags de Profissao Desativadas.", -1)
+    end
+    imgui.SameLine(); imgui.Text("Mostra apenas a profissao/cargo acima da cabeca.")
+
     local dist_esp = imgui.ImFloat(cfg.main.esp_distance)
     if imgui.SliderFloat("Distancia ESP", dist_esp, 100.0, 30000.0, "%.0f") then
         cfg.main.esp_distance = dist_esp.v
+        if esp_active then sampSetNameTagDrawDistance(cfg.main.esp_distance) end
         inicfg.save(cfg, "PainelInfoHelper_Config.ini")
+    end
+    
+    local show_prof = imgui.ImBool(cfg.main.esp_show_prof)
+    if imgui.Checkbox("Mostrar Profissao no ESP", show_prof) then
+        cfg.main.esp_show_prof = show_prof.v
+        inicfg.save(cfg, "PainelInfoHelper_Config.ini")
+    end
+    
+    local side_list = imgui.ImBool(cfg.main.esp_side_list)
+    if imgui.Checkbox("Lista Lateral de Profissoes", side_list) then
+        cfg.main.esp_side_list = side_list.v
+        inicfg.save(cfg, "PainelInfoHelper_Config.ini")
+    end
+    
+    if cfg.main.esp_side_list then
+        local side_x = imgui.ImInt(cfg.main.esp_side_list_x or 10)
+        if imgui.SliderInt("Posicao Lista X", side_x, 0, 1920) then
+            cfg.main.esp_side_list_x = side_x.v
+            inicfg.save(cfg, "PainelInfoHelper_Config.ini")
+        end
+        local side_y = imgui.ImInt(cfg.main.esp_side_list_y or 0)
+        if imgui.SliderInt("Posicao Lista Y (Offset)", side_y, -500, 500) then
+            cfg.main.esp_side_list_y = side_y.v
+            inicfg.save(cfg, "PainelInfoHelper_Config.ini")
+        end
+        local side_font = imgui.ImInt(cfg.main.esp_side_list_font_size or 7)
+        if imgui.SliderInt("Tamanho Fonte Lista", side_font, 5, 20) then
+            cfg.main.esp_side_list_font_size = side_font.v
+            prof_font = renderCreateFont('Arial', cfg.main.esp_side_list_font_size, 5)
+            inicfg.save(cfg, "PainelInfoHelper_Config.ini")
+        end
+        local side_fist = imgui.ImBool(cfg.main.esp_side_list_show_fist)
+        if imgui.Checkbox("Mostrar 'Punhos' na Lista", side_fist) then
+            cfg.main.esp_side_list_show_fist = side_fist.v
+            inicfg.save(cfg, "PainelInfoHelper_Config.ini")
+        end
+    end
+
+    local prof_offset = imgui.ImInt(cfg.main.esp_prof_offset or 0)
+    if imgui.SliderInt("Altura Tag Profissao", prof_offset, -50, 50) then
+        cfg.main.esp_prof_offset = prof_offset.v
+        inicfg.save(cfg, "PainelInfoHelper_Config.ini")
+    end
+
+    local col_val = tonumber(cfg.main.esp_prof_bg_color) or 0xE0000000
+    local a = bit.band(bit.rshift(col_val, 24), 0xFF)
+    local r = bit.band(bit.rshift(col_val, 16), 0xFF)
+    local g = bit.band(bit.rshift(col_val, 8), 0xFF)
+    local b = bit.band(col_val, 0xFF)
+    local bg_color_vec = imgui.ImFloat4(r/255, g/255, b/255, a/255)
+    if bg_color_vec then
+        if imgui.ColorEdit4("Cor Fundo Tag", bg_color_vec) then
+            local v1, v2, v3, v4
+            if bg_color_vec.v then v1, v2, v3, v4 = bg_color_vec.v[1], bg_color_vec.v[2], bg_color_vec.v[3], bg_color_vec.v[4]
+            else v1, v2, v3, v4 = bg_color_vec.x, bg_color_vec.y, bg_color_vec.z, bg_color_vec.w end
+            
+            local new_r = math.floor((v1 or 0) * 255)
+            local new_g = math.floor((v2 or 0) * 255)
+            local new_b = math.floor((v3 or 0) * 255)
+            local new_a = math.floor((v4 or 1) * 255)
+            cfg.main.esp_prof_bg_color = bit.bor(bit.lshift(new_a, 24), bit.lshift(new_r, 16), bit.lshift(new_g, 8), new_b)
+        end
+        imgui.SameLine()
+        if imgui.Button("Salvar##Color") then
+            inicfg.save(cfg, "PainelInfoHelper_Config.ini")
+            sampAddChatMessage("[PI] Cor salva!", -1)
+        end
     end
 
     imgui.Separator()
@@ -1263,7 +1634,11 @@ end
 local function start_admin_login()
     sampSendChat("/logaradm")
     lua_thread.create(function()
-        wait(250)
+        local timeout = 0
+        while not sampIsDialogActive() and timeout < 2000 do
+            wait(100)
+            timeout = timeout + 100
+        end
         if sampIsDialogActive() then
             sampSendDialogResponse(sampGetCurrentDialogId(), 1, 0, cfg.main.admin_pass)
             sampCloseCurrentDialogWithButton(1)
@@ -1703,7 +2078,12 @@ sampRegisterChatCommand("painelhelper", toggle_window); sampRegisterChatCommand(
 sampRegisterChatCommand("flogar", start_admin_login)
 sampRegisterChatCommand("admesp", function() 
     esp_active = not esp_active
-    sampAddChatMessage(esp_active and "[PI] ESP Admin Ativado." or "[PI] ESP Admin Desativado.", -1)
+    set_nametag_status(esp_active)
+    sampAddChatMessage(esp_active and "[PI] ESP Admin Ativado (SAMP Tags)." or "[PI] ESP Admin Desativado.", -1)
+end)
+sampRegisterChatCommand("proftags", function() 
+    prof_tags_active = not prof_tags_active
+    sampAddChatMessage(prof_tags_active and "[PI] Tags de Profissao Ativadas." or "[PI] Tags de Profissao Desativadas.", -1)
 end)
 sampRegisterChatCommand("duvidas", function() state.window_duvidas.v = not state.window_duvidas.v; check_process() end)
 sampRegisterChatCommand("locais", function() state.window_locais.v = not state.window_locais.v; check_process() end)
@@ -1730,7 +2110,13 @@ function main()
     end)
 
     while true do wait(0)
-        draw_esp_logic()
+        local status, err = pcall(draw_esp_logic)
+        if not status then
+            print("[PainelInfoHelper] Erro no ESP: " .. tostring(err))
+            esp_active = false
+            sampAddChatMessage("[PI] Erro critico no ESP: " .. tostring(err), 0xFF0000)
+        end
+
         if waiting_for_bind then
             for k = 1, 255 do
                 if wasKeyPressed(k) then
@@ -1747,5 +2133,11 @@ function main()
         end
 
         check_process()
+    end
+end
+
+function onScriptTerminate(script, quit)
+    if script == thisScript() then
+        set_nametag_status(false)
     end
 end
