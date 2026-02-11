@@ -6,6 +6,7 @@ require 'lib.moonloader'
 require 'lib.sampfuncs'
 local sampev = require 'lib.samp.events'
 local bit = require 'bit'
+local memory = require 'memory'
 
 local imgui = require 'imgui'
 local vkeys = require 'vkeys'
@@ -14,14 +15,16 @@ encoding.default = 'CP1252'
 local u8 = function(s) return s and encoding.UTF8(s) or "" end
 
 script_name("PainelInfo")
-script_author("Gerado por ChatGPT (GPT-5 Thinking mini) - Consolidado e Corrigido por Gemini")
-script_version("8.9.74")
-local script_ver_num = 8974
+script_author("Gerado por ChatGPT (GPT-5 Thinking mini) - Consolidado e Corrigido por Gemini, KOP")
+script_version("9.0.36")
+local script_ver_num = 9036
 script_version_number(script_ver_num)
 
 -- VARIAVEIS DO ADMIN ESP (INTEGRACAO)
 local esp_active = false
+local prof_tags_active = false
 local esp_font = renderCreateFont('Arial', 10, 5) -- Arial 10 com Borda
+local prof_font = nil -- Inicializado apos carregar config
 local esp_spectate_id = -1
 local esp_spectate_vehicle_id = -1
 local weapon_names_esp = {
@@ -54,6 +57,7 @@ local state = {
     saved_pos_name = imgui.ImBuffer(32),
     ip_extractor_total_buf = imgui.ImBuffer(5),
     ip_extractor_check_dupes = imgui.ImBool(false),
+    ip_extractor_auto_save = imgui.ImBool(true),
     admin_pass_buf = imgui.ImBuffer(64),
     device_scanner_active = false,
     current_scan_info = nil,
@@ -93,7 +97,15 @@ local cfg_default = {
         admin_pass = "7N0YU3EuhT",
         bind = 123, -- F12
         server_ip = "15.235.123.105:7777",
-        check_updates = true
+        check_updates = true,
+        esp_show_prof = true,
+        esp_prof_offset = 0,
+        esp_prof_bg_color = 0xE0000000,
+        esp_side_list = false,
+        esp_side_list_x = 10,
+        esp_side_list_y = 0,
+        esp_side_list_font_size = 7,
+        esp_side_list_show_fist = true
     },
     blacklist = {}
 }
@@ -111,7 +123,17 @@ if not cfg.main.server_ip or cfg.main.server_ip == "" then cfg.main.server_ip = 
 if not cfg.main.theme then cfg.main.theme = "Padrao" end
 if not cfg.main.transparency then cfg.main.transparency = 0.98 end
 if not cfg.main.esp_distance then cfg.main.esp_distance = 6000 end
+if cfg.main.esp_show_prof == nil then cfg.main.esp_show_prof = true end
+if not cfg.main.esp_prof_offset then cfg.main.esp_prof_offset = 0 end
+if not cfg.main.esp_prof_bg_color then cfg.main.esp_prof_bg_color = 0xE0000000 end
+if cfg.main.esp_side_list == nil then cfg.main.esp_side_list = false end
+if not cfg.main.esp_side_list_x then cfg.main.esp_side_list_x = 10 end
+if not cfg.main.esp_side_list_y then cfg.main.esp_side_list_y = 0 end
+if not cfg.main.esp_side_list_font_size then cfg.main.esp_side_list_font_size = 7 end
+if cfg.main.esp_side_list_show_fist == nil then cfg.main.esp_side_list_show_fist = true end
 if not cfg.blacklist then cfg.blacklist = {} end
+
+prof_font = renderCreateFont('Arial', cfg.main.esp_side_list_font_size, 5)
 
 -- LISTA DE TEMAS ATUALIZADA
 local theme_list = {"Padrao", "Claro", "Roxo", "Vermelho", "Verde", "Laranja", "Amarelo", "Rosa", "Ciano", "Escuro"}
@@ -165,7 +187,7 @@ local staff_by_rank = {
     Direcao = { ".42.", "Boris", "LucasFirmino" },
     Coordenador = { "Dog.", "Cleyton.", "MatheusUnity", "DiegoN_", "DaviL" },
     Administrador = { "Mirian", "TomRedl.", "KrugeR.", "Ryu." },
-    Moderador = { ".Lacta", "Belo", "Rafael82", "MateusVictor", "chukc", "Dr.Manhattan_.", "Lucasfuj", "Davi.", "LeonardoX", "Caua.." },
+    Moderador = { ".Lacta", "Belo", "Rafael182", "MateusVictor", "chukc", "Dr.Manhattan_.", "Lucasfuj", "Davi.", "LeonardoX", "Caua.." },
     Ajudante = { "Koyama.", "ZeGotinha_.", "Uberzitoh", "NotoriousBIG", "Liima.", "Scheppard", ".RagnaroK", "Faggio", "YuriUnity." },
     ["Estagiario"] = { "D0uglitas", "Duarte.Tm", "MitoMitoso", ".PATCHENCO", ".BS", "Freitas_" }
 }
@@ -189,6 +211,283 @@ local rank_color_map = {
 }
 local display_rank_map = { ["Estagiario"] = "Estagiario" }
 local copy_rank_map = { ["Estagiario"] = "Estagiario" }
+
+-- DETECCAO POR COR E HELPERS (MOVIDO PARA CIMA PARA EVITAR ERRO DE UPVALUES)
+local profession_colors_hex = { ["desempregado"] = 0xFFFFFFFF, ["entregador de jornal"] = 0xFFBEF781, ["gari"] = 0xFFB45F04, ["pizzaboy"] = 0xFFFAAC58, ["vendedor de rua"] = 0xFF00EE00, ["operador de empilhadeira"] = 0xFFBDBDBD, ["motoboy"] = 0xFF3CB671, ["leiteiro"] = 0xFFE6E6E6, ["lenhador"] = 0xFFA99C68, ["pescador"] = 0xFF00E2EE, ["correios"] = 0xFFEECA00, ["agente funerario"] = 0xFF863E14, ["fazendeiro"] = 0xFFBFB838, ["mecanico"] = 0xFF8B6969, ["eletricista"] = 0xFFEEDB82, ["meteorologista"] = 0xFF04B45F, ["processador de petroleo"] = 0xFF848484, ["advogado"] = 0xFF751EBC, ["paramedico"] = 0xFF58FAAC, ["transportador"] = 0xFF14A21B, ["motorista de betoneira"] = 0xFF696969, ["motorista de onibus"] = 0xFF0B6138, ["caminhoneiro"] = 0xFF585858, ["taxista"] = 0xFFFCFF00, ["maquinista"] = 0xFFFF8A68, ["motorista de carro forte"] = 0xFFCED8F6, ["piloto"] = 0xFF2A8C9F, ["seguranca de carro forte"] = 0xFFA9D0F5, ["guarda civil metropolitana"] = 0xFF64D4F9, ["policia penal"] = 0xFF00B3EE, ["policia militar"] = 0xFF2E9AFE, ["policia"] = 0xFF2E9AFE, ["policia civil"] = 0xFF2E64FE, ["delegado"] = 0xFF3A60CD, ["policia rodoviaria estadual"] = 0xFF5858FA, ["policia rodoviaria federal"] = 0xFF013ADF, ["policia federal"] = 0xFF3104B4, ["marinha"] = 0xFF2323BB, ["exercito"] = 0xFF2F4F4F, ["aeronautica"] = 0xFF8D840C, ["bombeiro"] = 0xFFFF8000, ["corregedoria"] = 0xFF363D75, ["plantador de maconha"] = 0xFFFFCCCC, ["vendedor de drogas"] = 0xFFFF9999, ["produtor de drogas"] = 0xFFFF6666, ["ladrao de veiculos"] = 0xFFFE4040, ["vendedor de armas"] = 0xFFDE2222, ["contrabandista nautico"] = 0xFFFF0000, ["contrabandista aereo"] = 0xFFFF0000, ["assassino"] = 0xFFC40202, ["assaltante"] = 0xFF990000, ["terrorista"] = 0xFF691313, ["chefao da mafia"] = 0xFF600000 }
+
+local function extract_rgb(argb)
+    local r = bit.band(bit.rshift(argb, 16), 0xFF)
+    local g = bit.band(bit.rshift(argb, 8), 0xFF)
+    local b = bit.band(argb, 0xFF)
+    return r, g, b
+end
+local function capitalize_each_word(str)
+    if not str then return "" end
+    local r = str:gsub("(%a)([%w']*)", function(f, rest) return f:upper() .. rest:lower() end)
+    r = r:gsub(" De ", " de ")
+    return r
+end
+local function get_closest_profession_name(argb)
+    if not argb then return "?" end
+    if argb == 0xFFFFFFFF then return "Desempregado" end
+    local pr, pg, pb = extract_rgb(argb)
+    local min_d = math.huge
+    local key = "Desempregado"
+    for pk, ph in pairs(profession_colors_hex) do
+        local cr, cg, cb = extract_rgb(ph)
+        local dr = pr - cr
+        local dg = pg - cg
+        local db = pb - cb
+        local d = dr * dr + dg * dg + db * db
+        if d < min_d then
+            min_d = d
+            key = pk
+        end
+    end
+    if min_d > 70 * 70 then return "Desempregado" end
+    return capitalize_each_word(key)
+end
+
+local function convert_samp_color(argb)
+    local r = bit.band(bit.rshift(argb, 16), 0xFF)
+    local g = bit.band(bit.rshift(argb, 8), 0xFF)
+    local b = bit.band(argb, 0xFF)
+    return imgui.ImVec4(r / 255, g / 255, b / 255, 1.0)
+end
+
+local function remove_accents(str)
+    if not str then return "" end
+    local s = tostring(str):lower()
+    s = s:gsub("[\224\225\226\227]", "a") -- áàâã
+    s = s:gsub("[\232\233\234]", "e")     -- éê
+    s = s:gsub("[\236\237]", "i")         -- í
+    s = s:gsub("[\242\243\244\245]", "o") -- óôõ
+    s = s:gsub("[\249\250]", "u")         -- ú
+    s = s:gsub("[\231]", "c")             -- ç
+    return s
+end
+
+local function set_nametag_status(enable)
+    local samp = getModuleHandle("samp.dll")
+    if not samp or samp == 0 then return end
+    
+    pcall(function()
+        -- Verifica se e R1 (Offset 0x71428 ou 458280)
+        local is_r1 = false
+        local check_r1_a = memory.read(samp + 0x71428, 1, true)
+        local check_r1_b = memory.read(samp + 458280, 1, true)
+        
+        if (check_r1_a == 0x74 or check_r1_a == 0x90) or (check_r1_b == 0x74 or check_r1_b == 0x90) then
+            is_r1 = true
+        end
+
+        if is_r1 then
+            -- Logica do Wallhack Fix (R1) - Convertida para nativo (memory.fill/write)
+            if enable then
+                -- NOPs (Preenche com 0x90)
+                memory.fill(samp + 457971, 0x90, 6, true)
+                memory.fill(samp + 458004, 0x90, 6, true)
+                memory.fill(samp + 458280, 0x90, 2, true)
+                memory.fill(samp + 462648, 0x90, 2, true)
+                memory.fill(samp + 462372, 0x90, 6, true)
+                if sampSetNameTagDrawDistance then sampSetNameTagDrawDistance(cfg.main.esp_distance) end
+            else
+                -- Restore (Restaura valores originais)
+                memory.write(samp + 457971, 0x24216591, 4, true)
+                memory.write(samp + 457975, 0x0000, 2, true)
+                memory.write(samp + 458004, 0x22053903, 4, true)
+                memory.write(samp + 458008, 0x0000, 2, true)
+                memory.write(samp + 458280, 0x4074, 2, true)
+                memory.write(samp + 462648, 0x6174, 2, true)
+                memory.write(samp + 462372, 0x24218127, 4, true)
+                memory.write(samp + 462376, 0x0000, 2, true)
+                if sampSetNameTagDrawDistance then sampSetNameTagDrawDistance(70.0) end
+            end
+            print("[PainelInfo] Wallhack (R1 Fix) " .. (enable and "Ativado" or "Desativado"))
+        else
+            -- Fallback para outras versoes (R2, R3, R4, DL) - Metodo Simples
+            local offsets = {
+                { ver="R2", off=0x714A8, on=0x9090, off_val=0x1D74 },
+                { ver="R3", off=0x75218, on=0x9090, off_val=0x1D74 },
+                { ver="R4", off=0x75948, on=0x9090, off_val=0x1D74 },
+                { ver="DL", off=0x759D8, on=0x9090, off_val=0x1D74 }
+            }
+            
+            local detected = nil
+            for _, item in ipairs(offsets) do
+                local addr = samp + item.off
+                local check = memory.read(addr, 1, true)
+                if check == 0x74 or check == 0x90 then
+                    detected = item
+                    break
+                end
+            end
+            
+            if detected then
+                local addr = samp + detected.off
+                if enable then
+                    memory.write(addr, detected.on, 2, true)
+                    if sampSetNameTagDrawDistance then sampSetNameTagDrawDistance(cfg.main.esp_distance) end
+                else
+                    memory.write(addr, detected.off_val, 2, true)
+                    if sampSetNameTagDrawDistance then sampSetNameTagDrawDistance(70.0) end
+                end
+                print("[PainelInfo] Wallhack (" .. detected.ver .. ") " .. (enable and "Ativado" or "Desativado"))
+            else
+                sampAddChatMessage("[PI] Erro: Versao do SAMP nao suportada para Wallhack.", 0xFF0000)
+            end
+        end
+    end)
+end
+
+-- FUNCAO LOGICA DO ESP (MOVIDA PARA CIMA)
+local function draw_esp_logic()
+    local side_list_data = {}
+    if (esp_active or prof_tags_active or cfg.main.esp_side_list) and esp_font and prof_font then
+        local myX, myY, myZ = getCharCoordinates(PLAYER_PED)
+        local camX, camY, camZ = getActiveCameraCoordinates()
+        local sw, sh = getScreenResolution()
+        
+        local render_list = {} 
+        for _, handle in ipairs(getAllChars()) do
+            if doesCharExist(handle) and handle ~= PLAYER_PED then
+                local res, id = sampGetPlayerIdByCharHandle(handle)
+                if res and sampIsPlayerConnected(id) then
+                    local x, y, z = getCharCoordinates(handle)
+                    local dist = getDistanceBetweenCoords3d(myX, myY, myZ, x, y, z)
+                    local onScreen = isPointOnScreen(x, y, z, 0.0)
+                    if dist < cfg.main.esp_distance then
+                        if onScreen or cfg.main.esp_side_list then
+                            table.insert(render_list, {handle = handle, id = id, dist = dist, x = x, y = y, z = z, onScreen = onScreen})
+                        end
+                    end
+                end
+            end
+        end
+        
+        table.sort(render_list, function(a, b) return a.dist < b.dist end)
+        
+        for _, item in ipairs(render_list) do
+            local handle = item.handle
+            local id = item.id
+            local x, y, z = item.x, item.y, item.z
+
+            -- Logica da Lista Lateral (Independente de estar na tela)
+            if cfg.main.esp_side_list then
+                local nick = sampGetPlayerNickname(id) or "Unknown"
+                local rank = staff_nick_to_rank_map[string.lower(nick)]
+                if not rank then
+                    local s, n = pcall(encoding.CP1251, nick)
+                    if s and n then rank = staff_nick_to_rank_map[string.lower(n)] end
+                end
+            
+                if not rank then
+                    local prof_name = get_closest_profession_name(sampGetPlayerColor(id))
+                    if prof_name then
+                        local wep_str = ""
+                        local wep = getCurrentCharWeapon(handle)
+                        if wep and wep > 0 and weapon_names_esp[wep] then wep_str = " [" .. weapon_names_esp[wep] .. "]" end
+                        
+                        table.insert(side_list_data, {id=id, nick=nick, prof=prof_name, color=sampGetPlayerColor(id), dist=item.dist, wep=wep_str})
+                    end
+                end
+            end
+
+            if (esp_active or prof_tags_active) and item.onScreen then
+                local is_visible = true
+                if not esp_active then
+                    is_visible = isLineOfSightClear(camX, camY, camZ, x, y, z + 0.7, true, false, false, true, false)
+                end
+
+                if is_visible then
+                    local drawX, drawY, drawZ
+                    
+                    if isCharInAnyCar(handle) then
+                        local car = getCarCharIsUsing(handle)
+                        if doesVehicleExist(car) then
+                            local cx, cy, cz = getCarCoordinates(car)
+                            drawX, drawY, drawZ = cx, cy, cz + 1.3
+                        else
+                            drawX, drawY, drawZ = x, y, z + 1.3
+                        end
+                    else
+                        local res, hx, hy, hz = pcall(getBodyPartCoordinates, handle, 8) -- Bone 8 = Cabeca
+                        if res and hx and hx ~= 0 then
+                            drawX, drawY = hx, hy
+                            drawZ = hz + (esp_active and 0.5 or 0.35)
+                        else
+                            drawX, drawY = x, y
+                            drawZ = z + (esp_active and 2.1 or 1.95)
+                        end
+                    end
+                    local headX, headY = convert3DCoordsToScreen(drawX, drawY, drawZ)
+                    
+                    if headX and headY then
+                        local currentY = headY
+
+                        local nick = sampGetPlayerNickname(id) or "Unknown"
+
+                        currentY = currentY + (cfg.main.esp_prof_offset or 0)
+
+                        if (prof_tags_active or (esp_active and cfg.main.esp_show_prof)) and not cfg.main.esp_side_list then
+                            local rank = staff_nick_to_rank_map[string.lower(nick)]
+                            if not rank then
+                                local s, n = pcall(encoding.CP1251, nick)
+                                if s and n then rank = staff_nick_to_rank_map[string.lower(n)] end
+                            end
+                        
+                            if not rank then
+                                local prof_name = get_closest_profession_name(sampGetPlayerColor(id))
+                                
+                                if prof_name then
+                                        local lines = {}
+                                        table.insert(lines, string.format("[%d] %s", id, prof_name))
+                                        
+                                        if #lines > 0 then
+                                            local maxW = 0
+                                            for _, l in ipairs(lines) do local w = renderGetFontDrawTextLength(prof_font, l); if w > maxW then maxW = w end end
+                                            local totalH = #lines * 10
+                                    
+                                            local pColor = sampGetPlayerColor(id)
+                                            if pColor == 0 then pColor = 0xFFFFFFFF end
+                                            pColor = bit.bor(pColor, 0xFF000000)
+
+                                            for i, l in ipairs(lines) do
+                                                local w = renderGetFontDrawTextLength(prof_font, l)
+                                                renderFontDrawText(prof_font, l, headX - (w / 2), currentY + ((i-1)*10), pColor)
+                                            end
+                                            currentY = currentY + totalH + 2
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+        
+        if #side_list_data > 0 then
+            local startY = sh / 2 - (#side_list_data * 14) / 2
+            local maxW = 0
+            for _, item in ipairs(side_list_data) do
+                local text = string.format("[%d] %s - %s%s (%.0fm)", item.id, item.nick, item.prof, item.wep or "", item.dist)
+                local w = renderGetFontDrawTextLength(prof_font, text)
+                if w > maxW then maxW = w end
+            end
+            
+            renderDrawBox(10, startY - 5, maxW + 10, #side_list_data * 14 + 10, 0x80000000)
+            
+            for i, item in ipairs(side_list_data) do
+                local text = string.format("[%d] %s - %s%s (%.0fm)", item.id, item.nick, item.prof, item.wep or "", item.dist)
+                local pColor = item.color
+                if pColor == 0 then pColor = 0xFFFFFFFF end
+                pColor = bit.bor(pColor, 0xFF000000)
+                
+                renderFontDrawText(prof_font, text, 15, startY + (i-1)*14, pColor)
+            end
+        end
+    end
+end
 
 -- LISTAS DE DADOS COMPLETAS
 local vehicles = { {id = 417, name = "Leviathan", price = 230000, speed = 153, type = "Aereo"}, {id = 469, name = "Sparrow", price = 180000, speed = 132, type = "Aereo"}, {id = 487, name = "Maverick", price = 220000, speed = 179, type = "Aereo"}, {id = 511, name = "Beagle", price = 200000, speed = 130, type = "Aereo"}, {id = 607, name = "Cropduster", price = 130000, speed = 125, type = "Aereo"}, {id = 513, name = "Stuntplane", price = 160000, speed = 149, type = "Aereo"}, {id = 519, name = "Shamal", price = 1500000, speed = 272, type = "Aereo"}, {id = 592, name = "Dodo", price = 100000, speed = 145, type = "Aereo"}, {id = 460, name = "Skimmer", price = 105000, speed = 144, type = "Aereo/Nautico"}, {id = 593, name = "Andromada", price = 0, speed = 272, type = "Aereo"}, {id = 594, name = "Nevada", price = 0, speed = 198, type = "Aereo"}, {id = 520, name = "Hydra", price = 0, speed = 272, type = "Aereo"}, {id = 548, name = "Cargobob", price = 0, speed = 158, type = "Aereo"}, {id = 563, name = "Raindance", price = 0, speed = 163, type = "Aereo"}, {id = 425, name = "Hunter", price = 0, speed = 210, type = "Aereo"}, {id = 446, name = "Squalo", price = 220000, speed = 243, type = "Nautico"}, {id = 452, name = "Speeder", price = 180000, speed = 235, type = "Nautico"}, {id = 454, name = "Tropic", price = 300000, speed = 132, type = "Nautico"}, {id = 473, name = "Dinghy", price = 10000, speed = 106, type = "Nautico"}, {id = 484, name = "Marquis", price = 230000, speed = 62, type = "Nautico"}, {id = 493, name = "Jetmax", price = 240000, speed = 181, type = "Nautico"}, {id = 539, name = "Vortex", price = 250000, speed = 100, type = "Nautico/Terrestre"}, {id = 453, name = "Reefer", price = 0, speed = 54, type = "Nautico"}, {id = 430, name = "Predator", price = 0, speed = 186, type = "Nautico"}, {id = 400, name = "Landstalker", price = 45000, speed = 159, type = "Terrestre"}, {id = 401, name = "Bravura", price = 20000, speed = 148, type = "Terrestre"}, {id = 402, name = "Buffalo", price = 25000, speed = 187, type = "Terrestre"}, {id = 403, name = "Linerunner", price = 220000, speed = 111, type = "Terrestre"}, {id = 404, name = "Perennial", price = 28000, speed = 133, type = "Terrestre"}, {id = 405, name = "Sentinel", price = 23000, speed = 165, type = "Terrestre"}, {id = 408, name = "Trashmaster", price = 60000, speed = 100, type = "Terrestre"}, {id = 409, name = "Stretch", price = 110000, speed = 159, type = "Terrestre"}, {id = 410, name = "Manana", price = 16000, speed = 130, type = "Terrestre"}, {id = 411, name = "Infernus", price = 200000, speed = 223, type = "Terrestre"}, {id = 412, name = "Voodoo", price = 42000, speed = 169, type = "Terrestre"}, {id = 413, name = "Pony", price = 50000, speed = 111, type = "Terrestre"}, {id = 414, name = "Mule", price = 55000, speed = 106, type = "Terrestre"}, {id = 415, name = "Cheetah", price = 40000, speed = 193, type = "Terrestre"}, {id = 418, name = "Moonbeam", price = 61000, speed = 116, type = "Terrestre"}, {id = 419, name = "Esperanto", price = 34000, speed = 150, type = "Terrestre"}, {id = 421, name = "Washington", price = 28000, speed = 154, type = "Terrestre"}, {id = 422, name = "Bobcat", price = 42000, speed = 141, type = "Terrestre"}, {id = 424, name = "BF Injection", price = 12000, speed = 136, type = "Terrestre"}, {id = 426, name = "Premier", price = 19000, speed = 174, type = "Terrestre"}, {id = 429, name = "Banshee", price = 50000, speed = 203, type = "Terrestre"}, {id = 431, name = "Bus", price = 330000, speed = 131, type = "Terrestre"}, {id = 434, name = "Hotknife", price = 53000, speed = 168, type = "Terrestre"}, {id = 436, name = "Previon", price = 22000, speed = 150, type = "Terrestre"}, {id = 437, name = "Coach", price = 350000, speed = 158, type = "Terrestre"}, {id = 439, name = "Stallion", price = 21000, speed = 169, type = "Terrestre"}, {id = 440, name = "Rumpo", price = 38000, speed = 137, type = "Terrestre"}, {id = 442, name = "Romero", price = 18000, speed = 140, type = "Terrestre"}, {id = 443, name = "Packer", price = 150000, speed = 124, type = "Terrestre"}, {id = 444, name = "Monster", price = 81000, speed = 111, type = "Terrestre"}, {id = 445, name = "Admiral", price = 15000, speed = 165, type = "Terrestre"}, {id = 451, name = "Turismo", price = 190000, speed = 194, type = "Terrestre"}, {id = 455, name = "Flatbed", price = 80000, speed = 158, type = "Terrestre"}, {id = 456, name = "Yankee", price = 70000, speed = 106, type = "Terrestre"}, {id = 458, name = "Solair", price = 32000, speed = 158, type = "Terrestre"}, {id = 459, name = "Berkleys RC Van", price = 48000, speed = 137, type = "Terrestre"}, {id = 461, name = "PCJ-600", price = 15000, speed = 162, type = "Terrestre"}, {id = 462, name = "Faggio", price = 4000, speed = 111, type = "Terrestre"}, {id = 463, name = "Freeway", price = 50000, speed = 104, type = "Terrestre"}, {id = 466, name = "Glendale", price = 34000, speed = 148, type = "Terrestre"}, {id = 467, name = "Oceanic", price = 38000, speed = 141, type = "Terrestre"}, {id = 468, name = "Sanchez", price = 8000, speed = 145, type = "Terrestre"}, {id = 471, name = "Quad", price = 10000, speed = 110, type = "Terrestre"}, {id = 474, name = "Hermes", price = 33000, speed = 150, type = "Terrestre"}, {id = 475, name = "Sabre", price = 30000, speed = 174, type = "Terrestre"}, {id = 477, name = "ZR-350", price = 150000, speed = 187, type = "Terrestre"}, {id = 478, name = "Walton", price = 32000, speed = 118, type = "Terrestre"}, {id = 479, name = "Regina", price = 28000, speed = 141, type = "Terrestre"}, {id = 480, name = "Comet", price = 20000, speed = 185, type = "Terrestre"}, {id = 481, name = "BMX", price = 500, speed = 97, type = "Terrestre"}, {id = 482, name = "Burrito", price = 58000, speed = 157, type = "Terrestre"}, {id = 483, name = "Camper", price = 28000, speed = 123, type = "Terrestre"}, {id = 489, name = "Rancher", price = 54000, speed = 140, type = "Terrestre"}, {id = 491, name = "Virgo", price = 38000, speed = 150, type = "Terrestre"}, {id = 492, name = "Greenwood", price = 31000, speed = 141, type = "Terrestre"}, {id = 494, name = "Hotring Racer", price = 160000, speed = 216, type = "Terrestre"}, {id = 495, name = "Sandking", price = 83000, speed = 177, type = "Terrestre"}, {id = 496, name = "Blista Compact", price = 16000, speed = 163, type = "Terrestre"}, {id = 498, name = "Boxville", price = 68000, speed = 108, type = "Terrestre"}, {id = 499, name = "Benson", price = 56000, speed = 123, type = "Terrestre"}, {id = 500, name = "Mesa", price = 40000, speed = 141, type = "Terrestre"}, {id = 502, name = "Hotring Racer 2", price = 162000, speed = 216, type = "Terrestre"}, {id = 503, name = "Hotring Racer 3", price = 164000, speed = 216, type = "Terrestre"}, {id = 504, name = "Bloodring Banger", price = 30000, speed = 174, type = "Terrestre"}, {id = 505, name = "Rancher", price = 52000, speed = 140, type = "Terrestre"}, {id = 506, name = "Super GT", price = 80000, speed = 180, type = "Terrestre"}, {id = 507, name = "Elegant", price = 29000, speed = 167, type = "Terrestre"}, {id = 508, name = "Journey", price = 110000, speed = 108, type = "Terrestre"}, {id = 509, name = "Bike", price = 300, speed = 105, type = "Terrestre"}, {id = 510, name = "Mountain Bike", price = 800, speed = 130, type = "Terrestre"}, {id = 514, name = "Tanker", price = 210000, speed = 121, type = "Terrestre"}, {id = 515, name = "Roadtrain", price = 230000, speed = 143, type = "Terrestre"}, {id = 516, name = "Nebula", price = 20000, speed = 158, type = "Terrestre"}, {id = 517, name = "Majestic", price = 22000, speed = 158, type = "Terrestre"}, {id = 518, name = "Buccaneer", price = 31000, speed = 165, type = "Terrestre"}, {id = 521, name = "FCR-900", price = 20000, speed = 162, type = "Terrestre"}, {id = 522, name = "NRG-500", price = 80000, speed = 178, type = "Terrestre"}, {id = 524, name = "Cement Truck", price = 84000, speed = 131, type = "Terrestre"}, {id = 525, name = "Towtruck", price = 66000, speed = 161, type = "Terrestre"}, {id = 526, name = "Fortune", price = 20000, speed = 158, type = "Terrestre"}, {id = 527, name = "Cadrona", price = 19000, speed = 150, type = "Terrestre"}, {id = 529, name = "Willard", price = 23000, speed = 150, type = "Terrestre"}, {id = 533, name = "Feltzer", price = 22000, speed = 168, type = "Terrestre"}, {id = 534, name = "Remington", price = 48000, speed = 169, type = "Terrestre"}, {id = 535, name = "Slamvan", price = 64000, speed = 159, type = "Terrestre"}, {id = 536, name = "Blade", price = 32000, speed = 174, type = "Terrestre"}, {id = 540, name = "Vincent", price = 25000, speed = 150, type = "Terrestre"}, {id = 541, name = "Bullet", price = 180000, speed = 204, type = "Terrestre"}, {id = 542, name = "Clover", price = 12000, speed = 165, type = "Terrestre"}, {id = 543, name = "Sadler", price = 31000, speed = 151, type = "Terrestre"}, {id = 545, name = "Hustler", price = 47000, speed = 148, type = "Terrestre"}, {id = 546, name = "Intruder", price = 28000, speed = 150, type = "Terrestre"}, {id = 547, name = "Primo", price = 20000, speed = 143, type = "Terrestre"}, {id = 549, name = "Tampa", price = 18000, speed = 154, type = "Terrestre"}, {id = 550, name = "Sunrise", price = 38000, speed = 145, type = "Terrestre"}, {id = 551, name = "Merit", price = 30000, speed = 158, type = "Terrestre"}, {id = 554, name = "Yosemite", price = 45000, speed = 144, type = "Terrestre"}, {id = 555, name = "Windsor", price = 60000, speed = 159, type = "Terrestre"}, {id = 556, name = "Monster A", price = 85000, speed = 111, type = "Terrestre"}, {id = 557, name = "Monster B", price = 88000, speed = 111, type = "Terrestre"}, {id = 558, name = "Uranus", price = 33000, speed = 157, type = "Terrestre"}, {id = 559, name = "Jester", price = 24000, speed = 179, type = "Terrestre"}, {id = 560, name = "Sultan", price = 53000, speed = 170, type = "Terrestre"}, {id = 561, name = "Stratum", price = 33000, speed = 155, type = "Terrestre"}, {id = 562, name = "Elegy", price = 62000, speed = 179, type = "Terrestre"}, {id = 565, name = "Flash", price = 30000, speed = 166, type = "Terrestre"}, {id = 566, name = "Tahoma", price = 26000, speed = 161, type = "Terrestre"}, {id = 567, name = "Savanna", price = 50000, speed = 174, type = "Terrestre"}, {id = 568, name = "Bandito", price = 18000, speed = 147, type = "Terrestre"}, {id = 571, name = "Kart", price = 14000, speed = 93, type = "Terrestre"}, {id = 573, name = "Dune", price = 140000, speed = 111, type = "Terrestre"}, {id = 575, name = "Broadway", price = 28000, speed = 158, type = "Terrestre"}, {id = 576, name = "Tornado", price = 45000, speed = 158, type = "Terrestre"}, {id = 578, name = "DFT-30", price = 112000, speed = 131, type = "Terrestre"}, {id = 579, name = "Huntley", price = 30000, speed = 158, type = "Terrestre"}, {id = 580, name = "Stafford", price = 30000, speed = 154, type = "Terrestre"}, {id = 581, name = "BF-400", price = 18000, speed = 152, type = "Terrestre"}, {id = 585, name = "Emperor", price = 27000, speed = 154, type = "Terrestre"}, {id = 586, name = "Wayfarer", price = 25000, speed = 145, type = "Terrestre"}, {id = 587, name = "Euros", price = 43000, speed = 166, type = "Terrestre"}, {id = 589, name = "Club", price = 30000, speed = 163, type = "Terrestre"}, {id = 600, name = "Picador", price = 38000, speed = 152, type = "Terrestre"}, {id = 602, name = "Alpha", price = 53000, speed = 170, type = "Terrestre"}, {id = 603, name = "Phoenix", price = 82000, speed = 172, type = "Terrestre"}, {id = 609, name = "Boxville", price = 72000, speed = 108, type = "Terrestre"}, {id = 457, name = "Caddy", price = 0, speed = 95, type = "Terrestre"}, {id = 531, name = "Tractor", price = 0, speed = 70, type = "Terrestre"}, {id = 532, name = "Combine Harvester", price = 0, speed = 111, type = "Terrestre"}, {id = 552, name = "Utility Van", price = 0, speed = 122, type = "Terrestre"}, {id = 428, name = "Securicar", price = 0, speed = 157, type = "Terrestre"}, {id = 448, name = "Pizzaboy", price = 0, speed = 143, type = "Terrestre"}, {id = 438, name = "Cabbie", price = 0, speed = 111, type = "Terrestre"}, {id = 420, name = "Taxi", price = 0, speed = 146, type = "Terrestre"}, {id = 490, name = "FBI Rancher", price = 0, speed = 158, type = "Terrestre"}, {id = 427, name = "Enforcer", price = 0, speed = 166, type = "Terrestre"}, {id = 596, name = "Police LS", price = 0, speed = 176, type = "Terrestre"}, {id = 597, name = "Police SF", price = 0, speed = 176, type = "Terrestre"}, {id = 598, name = "Police LV", price = 0, speed = 176, type = "Terrestre"}, {id = 523, name = "HPV1000", price = 0, speed = 152, type = "Terrestre"}, {id = 528, name = "FBI Truck", price = 0, speed = 178, type = "Terrestre"}, {id = 601, name = "S.W.A.T.", price = 0, speed = 111, type = "Terrestre"}, {id = 599, name = "Police Ranger", price = 0, speed = 159, type = "Terrestre"}, {id = 416, name = "Ambulance", price = 0, speed = 154, type = "Terrestre"}, {id = 407, name = "Fire Truck", price = 0, speed = 149, type = "Terrestre"}, {id = 512, name = "Freight", price = 0, speed = 181, type = "Terrestre"}, {id = 530, name = "Forklift", price = 0, speed = 60, type = "Terrestre"}, {id = 432, name = "Rhino", price = 0, speed = 94, type = "Terrestre"}, {id = 470, name = "Patriot", price = 0, speed = 158, type = "Terrestre"}, {id = 433, name = "Barracks", price = 0, speed = 111, type = "Terrestre"}, }
@@ -316,69 +615,18 @@ local faq_list = {
     { q = "Denuncias e Punicoes", a = "Motivos que contam nivel de denuncia: D.B, A.R, A.J, A.T.\nD.F (Denuncia Forum) acrescenta tempo extra.\nMotivos que removem na despunicao: D.B, D.F, A.R, A.J, A.T." },
 }
 
--- DETECCAO POR COR
-local profession_colors_hex = { ["desempregado"] = 0xFFFFFFFF, ["entregador de jornal"] = 0xFFBEF781, ["gari"] = 0xFFB45F04, ["pizzaboy"] = 0xFFFAAC58, ["vendedor de rua"] = 0xFF00EE00, ["operador de empilhadeira"] = 0xFFBDBDBD, ["motoboy"] = 0xFF3CB671, ["leiteiro"] = 0xFFE6E6E6, ["lenhador"] = 0xFFA99C68, ["pescador"] = 0xFF00E2EE, ["correios"] = 0xFFEECA00, ["agente funerario"] = 0xFF863E14, ["fazendeiro"] = 0xFFBFB838, ["mecanico"] = 0xFF8B6969, ["eletricista"] = 0xFFEEDB82, ["meteorologista"] = 0xFF04B45F, ["processador de petroleo"] = 0xFF848484, ["advogado"] = 0xFF751EBC, ["paramedico"] = 0xFF58FAAC, ["transportador"] = 0xFF14A21B, ["motorista de betoneira"] = 0xFF696969, ["motorista de onibus"] = 0xFF0B6138, ["caminhoneiro"] = 0xFF585858, ["taxista"] = 0xFFFCFF00, ["maquinista"] = 0xFFFF8A68, ["motorista de carro forte"] = 0xFFCED8F6, ["piloto"] = 0xFF2A8C9F, ["seguranca de carro forte"] = 0xFFA9D0F5, ["guarda civil metropolitana"] = 0xFF64D4F9, ["policia penal"] = 0xFF00B3EE, ["policia militar"] = 0xFF2E9AFE, ["policia"] = 0xFF2E9AFE, ["policia civil"] = 0xFF2E64FE, ["delegado"] = 0xFF3A60CD, ["policia rodoviaria estadual"] = 0xFF5858FA, ["policia rodoviaria federal"] = 0xFF013ADF, ["policia federal"] = 0xFF3104B4, ["marinha"] = 0xFF2323BB, ["exercito"] = 0xFF2F4F4F, ["aeronautica"] = 0xFF8D840C, ["bombeiro"] = 0xFFFF8000, ["corregedoria"] = 0xFF363D75, ["plantador de maconha"] = 0xFFFFCCCC, ["vendedor de drogas"] = 0xFFFF9999, ["produtor de drogas"] = 0xFFFF6666, ["ladrao de veiculos"] = 0xFFFE4040, ["vendedor de armas"] = 0xFFDE2222, ["contrabandista nautico"] = 0xFFFF0000, ["contrabandista aereo"] = 0xFFFF0000, ["assassino"] = 0xFFC40202, ["assaltante"] = 0xFF990000, ["terrorista"] = 0xFF691313, ["chefao da mafia"] = 0xFF600000 }
-local function convert_samp_color(argb)
-    local r = bit.band(bit.rshift(argb, 16), 0xFF)
-    local g = bit.band(bit.rshift(argb, 8), 0xFF)
-    local b = bit.band(argb, 0xFF)
-    return imgui.ImVec4(r / 255, g / 255, b / 255, 1.0)
-end
-
-local function remove_accents(str)
-    if not str then return "" end
-    local s = tostring(str):lower()
-    s = s:gsub("[\224\225\226\227]", "a") -- áàâã
-    s = s:gsub("[\232\233\234]", "e")     -- éê
-    s = s:gsub("[\236\237]", "i")         -- í
-    s = s:gsub("[\242\243\244\245]", "o") -- óôõ
-    s = s:gsub("[\249\250]", "u")         -- ú
-    s = s:gsub("[\231]", "c")             -- ç
-    return s
-end
-
-local function extract_rgb(argb)
-    local r = bit.band(bit.rshift(argb, 16), 0xFF)
-    local g = bit.band(bit.rshift(argb, 8), 0xFF)
-    local b = bit.band(argb, 0xFF)
-    return r, g, b
-end
-local function capitalize_each_word(str)
-    if not str then return "" end
-    local r = str:gsub("(%a)([%w']*)", function(f, rest) return f:upper() .. rest:lower() end)
-    r = r:gsub(" De ", " de ")
-    return r
-end
-local function get_closest_profession_name(argb)
-    if not argb then return "?" end
-    if argb == 0xFFFFFFFF then return "Desempregado" end
-    local pr, pg, pb = extract_rgb(argb)
-    local min_d = math.huge
-    local key = "Desempregado"
-    for pk, ph in pairs(profession_colors_hex) do
-        local cr, cg, cb = extract_rgb(ph)
-        local dr = pr - cr
-        local dg = pg - cg
-        local db = pb - cb
-        local d = dr * dr + dg * dg + db * db
-        if d < min_d then
-            min_d = d
-            key = pk
-        end
-    end
-    if min_d > 70 * 70 then return "Desempregado" end
-    return capitalize_each_word(key)
-end
-
 -- CORES IMGUI PADRÃO E FUNÇÕES UTILITÁRIAS
-local IMAGE_RED = imgui.ImVec4(1, 0, 0, 1)
-local IMAGE_GREEN = imgui.ImVec4(1.0, 1.0, 1.0, 1.0)
-local IMAGE_BLUE = imgui.ImVec4(0, 0.75, 1, 1)
-local IMAGE_YELLOW = imgui.ImVec4(1, 1, 0, 1)
-local IMAGE_WHITE = imgui.ImVec4(1, 1, 1, 1)
-local IMAGE_GREY = imgui.ImVec4(0.5, 0.5, 0.5, 1)
-local IMAGE_PINK = imgui.ImVec4(1, 0.4, 0.8, 1)
-local IMAGE_BLACK = imgui.ImVec4(0, 0, 0, 1)
+local UI_COLORS = {
+    RED = imgui.ImVec4(1, 0, 0, 1),
+    GREEN = imgui.ImVec4(1.0, 1.0, 1.0, 1.0),
+    BLUE = imgui.ImVec4(0, 0.75, 1, 1),
+    YELLOW = imgui.ImVec4(1, 1, 0, 1),
+    WHITE = imgui.ImVec4(1, 1, 1, 1),
+    GREY = imgui.ImVec4(0.5, 0.5, 0.5, 1),
+    PINK = imgui.ImVec4(1, 0.4, 0.8, 1),
+    BLACK = imgui.ImVec4(0, 0, 0, 1)
+}
+local SpanAllColumns = imgui.SelectableFlags and imgui.SelectableFlags.SpanAllColumns or 0
 
 local function get_display_rank(k) return display_rank_map[k] or k end
 local function get_rank_color(k) return rank_color_map[k] or rank_color_map.Default end
@@ -412,9 +660,9 @@ local function logIPRequestToFile(id, nick)
 end
 local function get_ping_color(p)
     local n = (type(p) == "number" and p) or 0
-    if n < 100 then return IMAGE_GREEN
-    elseif n <= 200 then return IMAGE_YELLOW
-    else return IMAGE_RED
+    if n < 100 then return UI_COLORS.GREEN
+    elseif n <= 200 then return UI_COLORS.YELLOW
+    else return UI_COLORS.RED
     end
 end
 
@@ -698,82 +946,155 @@ end
 
 -- FUNCAO LOGICA DO ESP (DESENHO NA TELA)
 local function draw_esp_logic()
-    if esp_active and esp_font then
+    local side_list_data = {}
+    local sw, sh = getScreenResolution()
+    if (esp_active or prof_tags_active or cfg.main.esp_side_list) and esp_font and prof_font then
         local myX, myY, myZ = getCharCoordinates(PLAYER_PED)
+        local camX, camY, camZ = getActiveCameraCoordinates()
         
+        local render_list = {}
         for _, handle in ipairs(getAllChars()) do
             if doesCharExist(handle) and handle ~= PLAYER_PED then
                 local res, id = sampGetPlayerIdByCharHandle(handle)
                 if res and sampIsPlayerConnected(id) then
-                    -- Protecao de Spectate (Nao mostrar quem voce esta telando)
-                    local skip = false
-                    if esp_spectate_id ~= -1 and id == esp_spectate_id then skip = true end
-                    if not skip and esp_spectate_vehicle_id ~= -1 and isCharInAnyCar(handle) then
-                        local car = getCarCharIsUsing(handle)
-                        local res, carId = sampGetVehicleIdByCarHandle(car)
-                        if res and carId == esp_spectate_vehicle_id then skip = true end
-                    end
-
-                    if not skip then
-                        local x, y, z = getCharCoordinates(handle)
-                        
-                        -- Verifica se esta no campo de visao
-                        if isPointOnScreen(x, y, z, 0.0) then
-                            local dist = getDistanceBetweenCoords3d(myX, myY, myZ, x, y, z)
-                            
-                            -- Verifica barreiras
-                            local checkVeh = true
-                            if isCharInAnyCar(handle) then checkVeh = false end
-                            local camX, camY, camZ = getActiveCameraCoordinates()
-                            local visible = isLineOfSightClear(camX, camY, camZ, x, y, z + 0.7, true, checkVeh, false, true, false)
-                            
-                            -- Wallhack ou Distancia > 65m
-                            if dist < cfg.main.esp_distance and (not visible or dist > 65) then
-                                local headX, headY = convert3DCoordsToScreen(x, y, z + 2.6)
-                                
-                                if headX and headY then
-                                    local nick = sampGetPlayerNickname(id) or "Unknown"
-                                    local hp = getCharHealth(handle)
-                                    local armor = getCharArmour(handle)
-                                    if hp > 100 then hp = 100 end; if hp < 0 then hp = 0 end; if armor > 100 then armor = 100 end
-                                    
-                                    local pColor = sampGetPlayerColor(id)
-                                    if pColor == 0 then pColor = 0xFFFFFFFF end
-                                    pColor = bit.bor(pColor, 0xFF000000)
-                                    
-                                    local text = string.format("%s (%d)", nick, id)
-                                    local textLen = renderGetFontDrawTextLength(esp_font, text)
-                                    local textX = headX - (textLen / 2); local textY = headY
-                                    renderFontDrawText(esp_font, text, textX, textY, pColor)
-                                    
-                                    local barW = 40; local barH = 5; local barX = headX - (barW / 2); local barY = textY + 15
-                                    renderDrawBox(barX - 1, barY - 1, barW + 2, barH + 2, 0xFF000000)
-                                    if hp > 0 then local hpW = barW * (hp / 100); renderDrawBox(barX, barY, hpW, barH, 0xFFB92228) end
-
-                                    local nextY = barY + barH + 3
-                                    if armor > 0 then
-                                        local armY = nextY
-                                        renderDrawBox(barX - 1, armY - 1, barW + 2, barH + 2, 0xFF000000)
-                                        local armW = barW * (armor / 100)
-                                        renderDrawBox(barX, armY, armW, barH, 0xFFF5F5F5)
-                                        nextY = armY + barH + 2
-                                    end
-
-                                    local wep = getCurrentCharWeapon(handle)
-                                    if wep and wep > 0 and weapon_names_esp[wep] then
-                                        local wname = weapon_names_esp[wep]
-                                        local wLen = renderGetFontDrawTextLength(esp_font, wname)
-                                        renderFontDrawText(esp_font, wname, headX - (wLen / 2), nextY, 0xFFFFFFFF)
-                                    end
-                                end
-                            end
+                    local x, y, z = getCharCoordinates(handle)
+                    local dist = getDistanceBetweenCoords3d(myX, myY, myZ, x, y, z)
+                    if dist < cfg.main.esp_distance then
+                        local onScreen = isPointOnScreen(x, y, z, 0.0)
+                        if onScreen or cfg.main.esp_side_list then
+                            table.insert(render_list, {handle = handle, id = id, dist = dist, x = x, y = y, z = z, onScreen = onScreen})
                         end
                     end
                 end
             end
         end
+        
+        table.sort(render_list, function(a, b) return a.dist < b.dist end)
+        
+        for _, item in ipairs(render_list) do
+            local handle = item.handle
+            local id = item.id
+            local x, y, z = item.x, item.y, item.z
+            
+            -- Logica da Lista Lateral (Independente de estar na tela)
+            if cfg.main.esp_side_list then
+                local nick = sampGetPlayerNickname(id) or "Unknown"
+                local rank = staff_nick_to_rank_map[string.lower(nick)]
+                if not rank then
+                    local s, n = pcall(encoding.CP1251, nick)
+                    if s and n then rank = staff_nick_to_rank_map[string.lower(n)] end
+                end
+            
+                if not rank then
+                    local prof_name = get_closest_profession_name(sampGetPlayerColor(id))
+                    if prof_name then
+                        local wep_str = ""
+                        local wep = getCurrentCharWeapon(handle)
+                        if wep and weapon_names_esp[wep] then
+                            if wep > 0 or cfg.main.esp_side_list_show_fist then
+                                wep_str = " [" .. weapon_names_esp[wep] .. "]"
+                            end
+                        end
+                        
+                        table.insert(side_list_data, {id=id, nick=nick, prof=prof_name, color=sampGetPlayerColor(id), dist=item.dist, wep=wep_str})
+                    end
+                end
+            end
+
+            local is_visible = true
+            if not esp_active then
+                is_visible = isLineOfSightClear(camX, camY, camZ, x, y, z + 0.7, true, false, false, true, false)
+            end
+
+            if (esp_active or prof_tags_active) and item.onScreen and is_visible then
+                local drawX, drawY, drawZ
+                
+                if isCharInAnyCar(handle) then
+                    local car = getCarCharIsUsing(handle)
+                    if doesVehicleExist(car) then
+                        local cx, cy, cz = getCarCoordinates(car)
+                        drawX, drawY, drawZ = cx, cy, cz + 1.3
+                    else
+                        drawX, drawY, drawZ = x, y, z + 1.3
+                    end
+                else
+                    local res, hx, hy, hz = pcall(getBodyPartCoordinates, handle, 8) -- Bone 8 = Cabeca
+                    if res and hx and hx ~= 0 then
+                        drawX, drawY = hx, hy
+                        drawZ = hz + (esp_active and 0.5 or 0.35)
+                    else
+                        drawX, drawY = x, y
+                        drawZ = z + (esp_active and 2.1 or 1.95)
+                    end
+                end
+                local headX, headY = convert3DCoordsToScreen(drawX, drawY, drawZ)
+                
+                if headX and headY then
+                    local currentY = headY
+
+                                    local nick = sampGetPlayerNickname(id) or "Unknown"
+
+                                    currentY = currentY + (cfg.main.esp_prof_offset or 0)
+
+                                    if (prof_tags_active or (esp_active and cfg.main.esp_show_prof)) and not cfg.main.esp_side_list then
+                                        local rank = staff_nick_to_rank_map[string.lower(nick)]
+                                        if not rank then
+                                            local s, n = pcall(encoding.CP1251, nick)
+                                            if s and n then rank = staff_nick_to_rank_map[string.lower(n)] end
+                                        end
+                                    
+                                        if not rank then
+                                            local prof_name = get_closest_profession_name(sampGetPlayerColor(id))
+                                            
+                                            if prof_name then
+                                                    local lines = {}
+                                                    table.insert(lines, string.format("[%d] %s", id, prof_name))
+                                                    
+                                                    if #lines > 0 then
+                                                        local maxW = 0
+                                                        for _, l in ipairs(lines) do local w = renderGetFontDrawTextLength(prof_font, l); if w > maxW then maxW = w end end
+                                                        local totalH = #lines * 10
+                                                
+                                                local pColor = sampGetPlayerColor(id)
+                                                if pColor == 0 then pColor = 0xFFFFFFFF end
+                                                pColor = bit.bor(pColor, 0xFF000000)
+
+                                                for i, l in ipairs(lines) do
+                                                    local w = renderGetFontDrawTextLength(prof_font, l)
+                                                    renderFontDrawText(prof_font, l, headX - (w / 2), currentY + ((i-1)*10), pColor)
+                                                end
+                                                currentY = currentY + totalH + 2
+                                            end
+                                        end
+                                    end
+                                    end
+                                end
+                end
+            end
+        end
+        
+        if #side_list_data > 0 then
+            local startX = cfg.main.esp_side_list_x or 10
+            local startY = (sh / 2 - (#side_list_data * 14) / 2) + (cfg.main.esp_side_list_y or 0)
+            local maxW = 0
+            for _, item in ipairs(side_list_data) do
+                local text = string.format("[%d] %s - %s%s (%.0fm)", item.id, item.nick, item.prof, item.wep or "", item.dist)
+                local w = renderGetFontDrawTextLength(prof_font, text)
+                if w > maxW then maxW = w end
+            end
+            
+            renderDrawBox(startX, startY - 5, maxW + 10, #side_list_data * 14 + 10, 0x80000000)
+            
+            for i, item in ipairs(side_list_data) do
+                local text = string.format("[%d] %s - %s%s (%.0fm)", item.id, item.nick, item.prof, item.wep or "", item.dist)
+                local pColor = item.color
+                if pColor == 0 then pColor = 0xFFFFFFFF end
+                pColor = bit.bor(pColor, 0xFF000000)
+                
+                renderFontDrawText(prof_font, text, startX + 5, startY + (i-1)*14, pColor)
+            end
+        end
     end
-end
 
 local function getPlayerId(arg)
     local id = tonumber(arg)
@@ -1079,6 +1400,67 @@ end
 -- NOVA FUNÇÃO DE CONFIGURAÇÃO (VISUAL)
 -- =========================================================================
 local update_history = {
+    { version = "9.0.36", date = "11/02/2026", changes = { "Correcao: Protecao contra crash ao ajustar distancia (funcao inexistente)." } },
+    { version = "9.0.35", date = "11/02/2026", changes = { "Correcao: Removido salvamento excessivo nos sliders (evita crash ao arrastar)." } },
+    { version = "9.0.34", date = "11/02/2026", changes = { "Otimizacao: Wallhack R1 agora usa funcoes nativas (independente de outros scripts)." } },
+    { version = "9.0.33", date = "11/02/2026", changes = { "Correcao: Melhorada deteccao do SA-MP R1 para Wallhack (Verifica multiplos enderecos)." } },
+    { version = "9.0.32", date = "11/02/2026", changes = { "Correcao: Integrado codigo do 'Wallhack Fix' para R1 (5 patches)." } },
+    { version = "9.0.31", date = "11/02/2026", changes = { "Correcao: Wallhack simplificado para garantir compatibilidade (Removeu patches instaveis)." } },
+    { version = "9.0.30", date = "11/02/2026", changes = { "Correcao: Crash ao ajustar distancia (removido save excessivo).", "Limpeza: Removido ESP visual antigo (foco no Wallhack nativo)." } },
+    { version = "9.0.29", date = "11/02/2026", changes = { "Correcao: Melhorada deteccao do Wallhack R1 (Fallback)." } },
+    { version = "9.0.28", date = "11/02/2026", changes = { "Limpeza: Removido codigo duplicado (funcoes de cor e texto)." } },
+    { version = "9.0.27", date = "11/02/2026", changes = { "Melhoria: Integrado Wallhack Avancado (R1) que remove limites de distancia." } },
+    { version = "9.0.26", date = "11/02/2026", changes = { "Melhoria: Feedback visual ao ativar Wallhack (Detecta versao R1-DL)." } },
+    { version = "9.0.25", date = "11/02/2026", changes = { "Correcao: ESP Wallhack agora suporta versoes R2/R3/R4/DL do SAMP." } },
+    { version = "9.0.24", date = "11/02/2026", changes = { "Correcao: Protecao contra crash ao ativar ESP (Memory Write)." } },
+    { version = "9.0.23", date = "11/02/2026", changes = { "ESP agora usa tags nativas do SAMP (Wallhack de NameTag)." } },
+    { version = "9.0.22", date = "11/02/2026", changes = { "Removidas barras de vida e colete do ESP (Usa padrao do SAMP)." } },
+    { version = "9.0.21", date = "11/02/2026", changes = { "Adicionado indicador '[ATIRANDO]' no ESP quando o jogador atira." } },
+    { version = "9.0.20", date = "10/02/2026", changes = { "Melhoria: Removido nome duplicado no ESP (Usa tag nativa do SAMP)." } },
+    { version = "9.0.19", date = "08/02/2026", changes = { "Melhoria: Removido nome duplicado no ESP (Usa tag nativa do SAMP)." } },
+    { version = "9.0.17", date = "08/02/2026", changes = { "Correcao: Sincronizacao da deteccao de arma na lista lateral." } },
+    { version = "9.0.16", date = "08/02/2026", changes = { "Melhoria: Metodo de deteccao de armas aprimorado (Slot Check)." } },
+    { version = "9.0.15", date = "08/02/2026", changes = { "Correcao: Mensagem 'nil' na lista lateral (protecao de variavel)." } },
+    { version = "9.0.14", date = "08/02/2026", changes = { "Melhoria: Adicionada deteccao de arma na lista lateral de profissoes." } },
+    { version = "9.0.13", date = "08/02/2026", changes = { "Removida 'Caixa de Profissoes na Tela' (Obsoleto).", "Adicionada opcao de tamanho da fonte na lista lateral." } },
+    { version = "9.0.12", date = "08/02/2026", changes = { "Correcao: Lista lateral agora funciona mesmo com ESP/Tags desligados." } },
+    { version = "9.0.11", date = "08/02/2026", changes = { "Melhoria: Lista lateral agora e movel (X/Y) e independente das tags." } },
+    { version = "9.0.10", date = "08/02/2026", changes = { "Melhoria: Lista lateral de profissoes agora mostra jogadores fora da tela." } },
+    { version = "9.0.09", date = "08/02/2026", changes = { "Melhoria: Auto-Login agora aguarda o dialogo (mais confiavel).", "Correcao: Flag SpanAllColumns corrigida nas listas." } },
+    { version = "9.0.08", date = "08/02/2026", changes = { "Correcao: Erro 'function has more than 60 upvalues' (Reorganizacao de codigo)." } },
+    { version = "9.0.07", date = "08/02/2026", changes = { "Adicionada opcao de Lista Lateral para tags de profissao (Menu Config)." } },
+    { version = "9.0.06", date = "08/02/2026", changes = { "Melhoria: Tag em veiculos agora fica acima do carro (Alinhado ao SAMP)." } },
+    { version = "9.0.05", date = "08/02/2026", changes = { "Removido fundo (faixa) da tag de profissao (Solicitado)." } },
+    { version = "9.0.04", date = "08/02/2026", changes = { "Melhoria: Tag de profissao agora usa a cor da profissao (Player Color)." } },
+    { version = "9.0.03", date = "08/02/2026", changes = { "Correcao: Erro de sintaxe (end extra) no ESP." } },
+    { version = "9.0.02", date = "08/02/2026", changes = { "Adicionado sistema anti-sobreposicao (Tags nao se misturam em veiculos)." } },
+    { version = "9.0.01", date = "08/02/2026", changes = { "Ajuste fino na altura da tag (Mais proxima da cabeca/barra de vida)." } },
+    { version = "9.0.00", date = "08/02/2026", changes = { "Correcao: Protecao contra crash no getBodyPartCoordinates (Bone)." } },
+    { version = "8.9.99", date = "08/02/2026", changes = { "Correcao: Erro critico no ESP (Validacao de cor e fonte)." } },
+    { version = "8.9.98", date = "08/02/2026", changes = { "Melhoria: Tag agora segue a cabeca do jogador (Bone) para evitar desvios." } },
+    { version = "8.9.97", date = "08/02/2026", changes = { "Correcao: Erro ao selecionar cor (acesso incorreto a variavel ImFloat4)." } },
+    { version = "8.9.96", date = "08/02/2026", changes = { "Correcao: Removida funcao incompativel (IsItemDeactivatedAfterEdit) que causava crash." } },
+    { version = "8.9.95", date = "08/02/2026", changes = { "Correcao: Crash ao abrir aba Comandos (Protecao na cor da tag e variaveis)." } },
+    { version = "8.9.94", date = "08/02/2026", changes = { "Correcao: Crash ao editar cor da tag (Salvamento otimizado)." } },
+    { version = "8.9.93", date = "08/02/2026", changes = { "Adicionada opcao para alterar a cor de fundo da tag de profissao." } },
+    { version = "8.9.92", date = "08/02/2026", changes = { "Correcao critica: Crash ao ativar ESP (Variavel incorreta na barra de vida)." } },
+    { version = "8.9.91", date = "08/02/2026", changes = { "Correcao: Tag sumia ao entrar em veiculos (Line of Sight ignorando veiculos)." } },
+    { version = "8.9.90", date = "08/02/2026", changes = { "Adicionada verificacao de parede (Line of Sight) quando ESP esta desligado." } },
+    { version = "8.9.89", date = "08/02/2026", changes = { "Ajuste automatico da posicao da tag quando ESP esta desligado (Alinhado ao SAMP)." } },
+    { version = "8.9.88", date = "08/02/2026", changes = { "Adicionado slider para ajustar altura da tag de profissao." } },
+    { version = "8.9.87", date = "08/02/2026", changes = { "Ajuste na posicao da tag de profissao (Mais abaixo do colete)." } },
+    { version = "8.9.86", date = "08/02/2026", changes = { "Removida exibicao de tag de profissao/cargo para Admins (Solicitado)." } },
+    { version = "8.9.85", date = "08/02/2026", changes = { "Adicionado ID na tag de profissao e suporte a profissao dupla (Staff + Cor)." } },
+    { version = "8.9.84", date = "08/02/2026", changes = { "Ajuste no fundo da tag de profissao (Mais escuro para melhor leitura)." } },
+    { version = "8.9.83", date = "08/02/2026", changes = { "Melhoria na exibicao da profissao no ESP (Fundo escuro para evitar sobreposicao)." } },
+    { version = "8.9.82", date = "08/02/2026", changes = { "Tag de profissao movida para baixo do HP (centralizada)." } },
+    { version = "8.9.81", date = "08/02/2026", changes = { "Ajuste visual nas tags de profissao (fonte menor e mais discreta)." } },
+    { version = "8.9.80", date = "08/02/2026", changes = { "Habilitado ESP/Tags no jogador que voce esta espiando (Spectate)." } },
+    { version = "8.9.79", date = "08/02/2026", changes = { "Tag de profissao movida para o lado do personagem (mais discreta)." } },
+    { version = "8.9.78", date = "07/02/2026", changes = { "Correcao: ESP/Tags agora aparecem sempre (mesmo proximo e visivel)." } },
+    { version = "8.9.77", date = "07/02/2026", changes = { "Separada a funcao de ver profissao do ESP (Tags de Profissao)." } },
+    { version = "8.9.76", date = "07/02/2026", changes = { "Adicionada opcao para desativar tag de profissao no ESP." } },
+    { version = "8.9.75", date = "07/02/2026", changes = { "Adicionado profissao/cargo no ESP (Tag no jogador)." } },
     { version = "8.9.74", date = "03/02/2026", changes = { "Correcao de crash ao verificar atualizacoes (Funcao movida e protegida)." } },
     { version = "8.9.73", date = "03/02/2026", changes = { "Adicionados campos de ID e Municao nas janelas separadas de Skins e Armas." } },
     { version = "8.9.72", date = "03/02/2026", changes = { "Layout das janelas separadas otimizado (Modo Compacto)." } },
@@ -1187,7 +1569,7 @@ end
 
 local function draw_faq_tab(search_buf, suffix, compact)
     if not compact then
-        imgui.TextColored(IMAGE_GREEN, "Duvidas e FAQ"); imgui.Separator()
+        imgui.TextColored(UI_COLORS.GREEN, "Duvidas e FAQ"); imgui.Separator()
     end
     if imgui.Button("Abrir Regras do Servidor (Forum)", imgui.ImVec2(-1, 25)) then
         os.execute('explorer "https://www.loskatchorros.com.br/forum/index.php?/topic/328257-regras-do-servidor/"')
@@ -1234,13 +1616,13 @@ local function draw_faq_tab(search_buf, suffix, compact)
         imgui.NextColumn()
         imgui.Separator()
         local tf_limits={{40,99,5000},{100,199,10000},{200,299,15000},{300,399,20000},{400,499,25000},{500,599,30000},{600,699,35000},{700,799,40000},{800,899,45000},{900,999,50000},{1000,1099,55000},{1100,1199,60000},{1200,1299,65000},{1300,1399,70000},{1400,1499,75000},{1500,1599,80000},{1600,1699,85000},{1700,1799,90000},{1800,1899,95000},{1900,1999,100000},{2000,2099,105000},{2100,2199,110000},{2200,2299,115000},{2300,2399,120000},{2400,2499,125000},{2500,2599,130000},{2600,2699,135000},{2700,2799,140000},{2800,2899,145000},{2900,2999,150000},{3000,3099,155000},{3100,3199,160000},{3200,3299,165000},{3300,9999,500000}}
-        for _,item in ipairs(tf_limits) do local r_str=item[2]==9999 and string.format("Lvl %d+",item[1]) or string.format("Lvl %d-%d",item[1],item[2]); local l_str="$"..formatPrice(item[3]); imgui.Text(r_str); imgui.NextColumn(); imgui.TextColored(IMAGE_YELLOW,l_str); imgui.NextColumn(); imgui.Separator() end; imgui.Columns(1); imgui.Spacing()
+        for _,item in ipairs(tf_limits) do local r_str=item[2]==9999 and string.format("Lvl %d+",item[1]) or string.format("Lvl %d-%d",item[1],item[2]); local l_str="$"..formatPrice(item[3]); imgui.Text(r_str); imgui.NextColumn(); imgui.TextColored(UI_COLORS.YELLOW,l_str); imgui.NextColumn(); imgui.Separator() end; imgui.Columns(1); imgui.Spacing()
     end
 
     if imgui.CollapsingHeader("Historico de Atualizacoes") then
         imgui.Spacing()
         for _, update in ipairs(update_history) do
-            imgui.TextColored(IMAGE_YELLOW, string.format("v%s - %s", update.version, update.date))
+            imgui.TextColored(UI_COLORS.YELLOW, string.format("v%s - %s", update.version, update.date))
             for _, change in ipairs(update.changes) do
                 imgui.BulletText(u8(change))
             end
@@ -1256,7 +1638,11 @@ end
 local function start_admin_login()
     sampSendChat("/logaradm")
     lua_thread.create(function()
-        wait(250) -- Espera 250ms para o dialog abrir
+        local timeout = 0
+        while not sampIsDialogActive() and timeout < 2000 do
+            wait(100)
+            timeout = timeout + 100
+        end
         if sampIsDialogActive() then
             sampSendDialogResponse(sampGetCurrentDialogId(), 1, 0, cfg.main.admin_pass)
             sampCloseCurrentDialogWithButton(1)
@@ -1272,7 +1658,7 @@ local function start_admin_login()
 end
 
 local function draw_config_tab()
-    imgui.TextColored(IMAGE_GREEN, "Configuracoes"); imgui.Separator()
+    imgui.TextColored(UI_COLORS.GREEN, "Configuracoes"); imgui.Separator()
     imgui.TextDisabled("Ajuste temas, transparencia, senha de admin e gerencie backups.")
     imgui.Spacing()
     imgui.Spacing()
@@ -1372,34 +1758,121 @@ end
 -- =========================================================================
 
 local function draw_players_tab()
-    local is_nov=(state.active_tab==1); local is_on=(state.active_tab==2); local show_pcol=is_on; local hdr=is_nov and "Novatos:" or is_on and "Online:" or ""; imgui.Text(hdr); imgui.Separator(); local data={}; local staff={}; local players={}; local cnt=0; local maxid=sampGetMaxPlayerId()
+    local is_nov = (state.active_tab == 1)
+    local is_on = (state.active_tab == 2)
+    local show_pcol = is_on
+    local hdr = is_nov and "Novatos:" or (is_on and "Online:" or "")
+    
+    imgui.Text(hdr)
+    imgui.Separator()
+    
+    local data = {}
+    local staff = {}
+    local players = {}
+    local cnt = 0
+    local maxid = sampGetMaxPlayerId()
+    
     if is_nov then
         imgui.TextDisabled("Lista de jogadores novatos (Nivel < 12). Botao direito no nome para opcoes.")
     else
         imgui.TextDisabled("Lista de todos os jogadores online. Staff no topo. Botao direito para opcoes.")
     end
-    local search_norm = remove_accents(state.search_text.v)
-    for i=0,maxid do if sampIsPlayerConnected(i) then local nick=sampGetPlayerNickname(i); if nick and #nick>0 then local rank=staff_nick_to_rank_map[string.lower(nick)]; if not rank then local s,n=pcall(encoding.CP1251,nick); if s and n then rank=staff_nick_to_rank_map[string.lower(n)] end end; local ping=sampGetPlayerPing(i) or 0; local score=sampGetPlayerScore(i) or 0; local color; local prof; if rank then color=get_rank_color(rank); prof=get_display_rank(rank) else local argb=sampGetPlayerColor(i); color=convert_samp_color(argb); prof=get_closest_profession_name(argb) end; local pdata={id=i,nick=nick,rank=rank,color=color,is_staff=rank~=nil,Level=score,Ping=ping,profession=prof}; local paused=sampIsPlayerPaused(i) or false; local passes=(is_on) or (is_nov and pdata.Level<12 and not paused); if passes then local prof_norm=remove_accents(pdata.profession or ""); local nick_norm=remove_accents(nick); local id_s=tostring(i); local m_txt=nick_norm:find(search_norm,1,true) or prof_norm:find(search_norm,1,true); local m_id=id_s:find(search_norm,1,true); if m_txt or m_id then table.insert(data,pdata); if is_on then if pdata.is_staff then table.insert(staff,pdata) else table.insert(players,pdata) end else table.insert(players,pdata) end end; cnt=cnt+1 end end end end
     
-    local total_pc = 0; local total_mobile = 0; local total_mafia = 0; local total_honest = 0
+    local search_norm = remove_accents(state.search_text.v)
+    for i = 0, maxid do
+        if sampIsPlayerConnected(i) then
+            local nick = sampGetPlayerNickname(i)
+            if nick and #nick > 0 then
+                local rank = staff_nick_to_rank_map[string.lower(nick)]
+                if not rank then
+                    local s, n = pcall(encoding.CP1251, nick)
+                    if s and n then rank = staff_nick_to_rank_map[string.lower(n)] end
+                end
+                
+                local ping = sampGetPlayerPing(i) or 0
+                local score = sampGetPlayerScore(i) or 0
+                local color
+                local prof
+                
+                if rank then
+                    color = get_rank_color(rank)
+                    prof = get_display_rank(rank)
+                else
+                    local argb = sampGetPlayerColor(i)
+                    color = convert_samp_color(argb)
+                    prof = get_closest_profession_name(argb)
+                end
+                
+                local pdata = {
+                    id = i,
+                    nick = nick,
+                    rank = rank,
+                    color = color,
+                    is_staff = (rank ~= nil),
+                    Level = score,
+                    Ping = ping,
+                    profession = prof
+                }
+                
+                local paused = sampIsPlayerPaused(i) or false
+                local passes = (is_on) or (is_nov and pdata.Level < 12 and not paused)
+                
+                if passes then
+                    local prof_norm = remove_accents(pdata.profession or "")
+                    local nick_norm = remove_accents(nick)
+                    local id_s = tostring(i)
+                    
+                    local m_txt = nick_norm:find(search_norm, 1, true) or prof_norm:find(search_norm, 1, true)
+                    local m_id = id_s:find(search_norm, 1, true)
+                    
+                    if m_txt or m_id then
+                        table.insert(data, pdata)
+                        if is_on then
+                            if pdata.is_staff then
+                                table.insert(staff, pdata)
+                            else
+                                table.insert(players, pdata)
+                            end
+                        else
+                            table.insert(players, pdata)
+                        end
+                    end
+                    cnt = cnt + 1
+                end
+            end
+        end
+    end
+    
+    local total_pc = 0
+    local total_mobile = 0
+    local total_mafia = 0
+    local total_honest = 0
+    
     for _, p in ipairs(data) do
-        if state.player_devices[p.id] == "PC" then total_pc = total_pc + 1
-        elseif state.player_devices[p.id] == "Mobile" then total_mobile = total_mobile + 1 end
+        if state.player_devices[p.id] == "PC" then
+            total_pc = total_pc + 1
+        elseif state.player_devices[p.id] == "Mobile" then
+            total_mobile = total_mobile + 1
+        end
         
         if not p.is_staff then
-             local p_type = prof_type_map[(p.profession or ""):lower()]
-             if p_type == "Mafia" then total_mafia = total_mafia + 1 else total_honest = total_honest + 1 end
+            local p_type = prof_type_map[(p.profession or ""):lower()]
+            if p_type == "Mafia" then
+                total_mafia = total_mafia + 1
+            else
+                total_honest = total_honest + 1
+            end
         end
     end
 
-    imgui.Text(string.format("Total: %d",#data))
+    imgui.Text(string.format("Total: %d", #data))
     if is_on then
-        imgui.SameLine(); imgui.TextColored(IMAGE_GREY, "|")
-        imgui.SameLine(); imgui.TextColored(IMAGE_GREEN, string.format("Honestas: %d", total_honest))
-        imgui.SameLine(); imgui.TextColored(IMAGE_RED, string.format("Mafia: %d", total_mafia))
-        imgui.SameLine(); imgui.TextColored(IMAGE_GREY, "|")
-        imgui.SameLine(); imgui.TextColored(IMAGE_BLUE, string.format("PC: %d", total_pc))
-        imgui.SameLine(); imgui.TextColored(IMAGE_PINK, string.format("Mobile: %d", total_mobile))
+        imgui.SameLine(); imgui.TextColored(UI_COLORS.GREY, "|")
+        imgui.SameLine(); imgui.TextColored(UI_COLORS.GREEN, string.format("Honestas: %d", total_honest))
+        imgui.SameLine(); imgui.TextColored(UI_COLORS.RED, string.format("Mafia: %d", total_mafia))
+        imgui.SameLine(); imgui.TextColored(UI_COLORS.GREY, "|")
+        imgui.SameLine(); imgui.TextColored(UI_COLORS.BLUE, string.format("PC: %d", total_pc))
+        imgui.SameLine(); imgui.TextColored(UI_COLORS.PINK, string.format("Mobile: %d", total_mobile))
         imgui.SameLine()
         if not state.device_scanner_active then
             if imgui.Button("Escanear Dispositivos") then
@@ -1421,7 +1894,11 @@ local function draw_players_tab()
                                     sampSendChat("/ip " .. i)
                                     state.device_scan_progress = i
                                     local timeout = 0
-                                    while not state.scan_response_received and timeout < 200 do wait(10); timeout = timeout + 10; if state.scan_message_count > 0 and timeout > 50 then break end end
+                                    while not state.scan_response_received and timeout < 200 do
+                                        wait(10)
+                                        timeout = timeout + 10
+                                        if state.scan_message_count > 0 and timeout > 50 then break end
+                                    end
                                     if attempt == 1 and not state.player_devices[i] then wait(50) end
                                 end
                                 if sampIsDialogActive() then sampCloseCurrentDialogWithButton(0) end
@@ -1434,72 +1911,148 @@ local function draw_players_tab()
                 end)
             end
         else
-            imgui.TextColored(IMAGE_YELLOW, string.format("Escaneando... ID %d", state.device_scan_progress))
+            imgui.TextColored(UI_COLORS.YELLOW, string.format("Escaneando... ID %d", state.device_scan_progress))
         end
     end
-    imgui.Separator(); imgui.BeginChild("plist_child",imgui.ImVec2(0,0),true)
+    
+    imgui.Separator()
+    imgui.BeginChild("plist_child", imgui.ImVec2(0, 0), true)
 
-    local function render_plist(list,show_pc)
-        local idw=40; local nickw=show_pc and 150 or 250; local profw=show_pc and 160 or 0; local lvlw=40; local pingw=110
-        local sc=imgui.GetStyle().Colors[imgui.Col.Separator]; local st="|"; local sw=imgui.CalcTextSize(st).x; local sp=imgui.GetStyle().ItemSpacing.x
+    local function render_plist(list, show_pc)
+        local idw = 40
+        local nickw = show_pc and 150 or 250
+        local profw = show_pc and 160 or 0
+        local lvlw = 40
+        local pingw = 110
+        local sc = imgui.GetStyle().Colors[imgui.Col.Separator]
+        local st = "|"
+        local sw = imgui.CalcTextSize(st).x
+        local sp = imgui.GetStyle().ItemSpacing.x
 
         for _,p in ipairs(list) do
-            local is_s=p.is_staff; local paused=sampIsPlayerPaused(p.id); local disp_p=p.profession or "?"; if paused then if is_s then disp_p=u8(p.profession).." (AFK)" else disp_p="AFK" end end
+            local is_s = p.is_staff
+            local paused = sampIsPlayerPaused(p.id)
+            local disp_p = p.profession or "?"
+            if paused then
+                if is_s then
+                    disp_p = u8(p.profession) .. " (AFK)"
+                else
+                    disp_p = "AFK"
+                end
+            end
+            
             local curX = imgui.GetCursorPosX()
-            local line_lbl=string.format("##p_%d",p.id)
-            imgui.Selectable(line_lbl, false, imgui.SelectableFlags_SpanAllColumns, imgui.ImVec2(0, imgui.GetTextLineHeight()))
+            local line_lbl = string.format("##p_%d", p.id)
+            imgui.Selectable(line_lbl, false, SpanAllColumns, imgui.ImVec2(0, imgui.GetTextLineHeight()))
             imgui.SetItemAllowOverlap()
-            if imgui.BeginPopupContextItem("p_act"..p.id) then 
-                if imgui.MenuItem("CP Nick") then imgui.SetClipboardText(u8(p.nick)); sampAddChatMessage("Nick CP",0) end; 
-                if p.profession then if imgui.MenuItem("CP Info") then imgui.SetClipboardText(u8(p.profession)); sampAddChatMessage("Info CP",0) end end; 
+            
+            if imgui.BeginPopupContextItem("p_act" .. p.id) then
+                if imgui.MenuItem("CP Nick") then
+                    imgui.SetClipboardText(u8(p.nick))
+                    sampAddChatMessage("Nick CP", 0)
+                end
+                if p.profession then
+                    if imgui.MenuItem("CP Info") then
+                        imgui.SetClipboardText(u8(p.profession))
+                        sampAddChatMessage("Info CP", 0)
+                    end
+                end
                 local ip_data = state.player_ips[p.id]
-                if ip_data and ip_data.nick == p.nick then if imgui.MenuItem("Copiar IP") then imgui.SetClipboardText(ip_data.ip); sampAddChatMessage("[PI] IP copiado: " .. ip_data.ip, -1) end end
-                imgui.Separator(); 
-                if imgui.MenuItem("Ir ID") then sampSendChat("/ir "..p.id); state.window_open.v=false; imgui.Process=false end; 
-                if imgui.MenuItem("Espiar ID") then sampSendChat("/espiar "..p.id); state.window_open.v=false; imgui.Process=false end; 
-                if imgui.MenuItem("Ver IP") then sampSendChat("/ip "..p.id); logIPRequestToFile(p.id,p.nick) end; 
-                if imgui.MenuItem("Ver Docs") then sampSendChat("/documentos "..p.id); state.window_open.v=false; imgui.Process=false end; 
-                imgui.EndPopup() 
+                if ip_data and ip_data.nick == p.nick then
+                    if imgui.MenuItem("Copiar IP") then
+                        imgui.SetClipboardText(ip_data.ip)
+                        sampAddChatMessage("[PI] IP copiado: " .. ip_data.ip, -1)
+                    end
+                end
+                imgui.Separator()
+                if imgui.MenuItem("Ir ID") then
+                    sampSendChat("/ir " .. p.id)
+                    state.window_open.v = false
+                    imgui.Process = false
+                end
+                if imgui.MenuItem("Espiar ID") then
+                    sampSendChat("/espiar " .. p.id)
+                    state.window_open.v = false
+                    imgui.Process = false
+                end
+                if imgui.MenuItem("Ver IP") then
+                    sampSendChat("/ip " .. p.id)
+                    logIPRequestToFile(p.id, p.nick)
+                end
+                if imgui.MenuItem("Ver Docs") then
+                    sampSendChat("/documentos " .. p.id)
+                    state.window_open.v = false
+                    imgui.Process = false
+                end
+                imgui.EndPopup()
             end
 
-            local p1s=idw; local p2ns=p1s+sw+sp; local p2s=p2ns+nickw
-            local p3ps,p3s,p4ls
+            local p1s = idw
+            local p2ns = p1s + sw + sp
+            local p2s = p2ns + nickw
+            local p3ps, p3s, p4ls
 
-            imgui.SameLine(curX); imgui.TextColored(p.color,tostring(p.id))
-            imgui.SameLine(p1s); imgui.TextColored(sc,st)
-            imgui.SameLine(p2ns); imgui.TextColored(p.color,u8(p.nick))
+            imgui.SameLine(curX)
+            imgui.TextColored(p.color, tostring(p.id))
+            imgui.SameLine(p1s)
+            imgui.TextColored(sc, st)
+            imgui.SameLine(p2ns)
+            imgui.TextColored(p.color, u8(p.nick))
 
             if show_pc then
-                p3ps=p2s+sw+sp; p3s=p3ps+profw
-                imgui.SameLine(p2s); imgui.TextColored(sc,st)
-                imgui.SameLine(p3ps); local tc=paused and IMAGE_GREY or p.color; imgui.TextColored(tc,u8(disp_p))
-                p4ls=p3s+sw+sp
-                imgui.SameLine(p3s); imgui.TextColored(sc,st)
+                p3ps = p2s + sw + sp
+                p3s = p3ps + profw
+                imgui.SameLine(p2s)
+                imgui.TextColored(sc, st)
+                imgui.SameLine(p3ps)
+                local tc = paused and UI_COLORS.GREY or p.color
+                imgui.TextColored(tc, u8(disp_p))
+                p4ls = p3s + sw + sp
+                imgui.SameLine(p3s)
+                imgui.TextColored(sc, st)
             else
-                p4ls=p2s+sw+sp
-                imgui.SameLine(p2s); imgui.TextColored(sc,st)
+                p4ls = p2s + sw + sp
+                imgui.SameLine(p2s)
+                imgui.TextColored(sc, st)
             end
 
-            imgui.SameLine(p4ls); local lvl=p.Level or 0; imgui.TextColored(p.color,tostring(lvl))
-            local p4s=p4ls+lvlw; imgui.SameLine(p4s); imgui.TextColored(sc,st)
-            local p5ps=p4s+sw+sp; imgui.SameLine(p5ps); local ping=p.Ping or 0; local pc=get_ping_color(ping); local dev_str = state.player_devices[p.id] and (" ["..state.player_devices[p.id].."]") or ""; local pt=string.format("%d ms%s",math.floor(ping), dev_str); imgui.TextColored(pc,pt)
-            
-            local p5s=p5ps+pingw; local p6is=p5s+sw+sp; imgui.SameLine(p5s); imgui.TextColored(sc,st); imgui.SameLine(p6is); 
+            imgui.SameLine(p4ls)
+            local lvl = p.Level or 0
+            imgui.TextColored(p.color, tostring(lvl))
+            local p4s = p4ls + lvlw
+            imgui.SameLine(p4s)
+            imgui.TextColored(sc, st)
+            local p5ps = p4s + sw + sp
+            imgui.SameLine(p5ps)
+            local ping = p.Ping or 0
+            local pc = get_ping_color(ping)
+            local dev_str = state.player_devices[p.id] and (" [" .. state.player_devices[p.id] .. "]") or ""
+            local pt = string.format("%d ms%s", math.floor(ping), dev_str)
+            imgui.TextColored(pc, pt)
+
+            local p5s = p5ps + pingw
+            local p6is = p5s + sw + sp
+            imgui.SameLine(p5s)
+            imgui.TextColored(sc, st)
+            imgui.SameLine(p6is)
             local ip_data = state.player_ips[p.id]
             local ip_str = (ip_data and ip_data.nick == p.nick) and ip_data.ip or "-"
             imgui.TextDisabled(ip_str)
         end
     end
 
-    if #data==0 then imgui.Text("Nenhum.")
+    if #data == 0 then
+        imgui.Text("Nenhum.")
     else
         draw_player_header(show_pcol)
         imgui.Separator()
-        table.sort(staff,function(a,b) return a.id<b.id end)
-        table.sort(players,function(a,b) return a.id<b.id end)
+        table.sort(staff, function(a, b) return a.id < b.id end)
+        table.sort(players, function(a, b) return a.id < b.id end)
         if is_on and #staff > 0 then
             render_plist(staff, show_pcol)
-            imgui.Spacing(); imgui.Separator(); imgui.Spacing()
+            imgui.Spacing()
+            imgui.Separator()
+            imgui.Spacing()
         end
         render_plist(players, show_pcol)
     end
@@ -1514,17 +2067,17 @@ local function draw_professions_content(search_val, compact)
     imgui.PopItemWidth()
     imgui.SameLine()
     local selected_prof_type = prof_types[state.prof_type_filter_idx.v + 1]
-    imgui.TextColored(IMAGE_GREEN,"Profissões:"); imgui.Separator(); local filt_p=filter_professions(professions,search_norm); local cnt=#filt_p; local leg,maf={}, {}; for _,p in ipairs(filt_p) do if p.type=="Mafia" then table.insert(maf,p) else table.insert(leg,p) end end; imgui.Text("Encontradas: "..cnt); imgui.Separator(); imgui.BeginChild("ProfListInfo",imgui.ImVec2(0,0),true); draw_profession_header(); 
+    imgui.TextColored(UI_COLORS.GREEN,"Profissões:"); imgui.Separator(); local filt_p=filter_professions(professions,search_norm); local cnt=#filt_p; local leg,maf={}, {}; for _,p in ipairs(filt_p) do if p.type=="Mafia" then table.insert(maf,p) else table.insert(leg,p) end end; imgui.Text("Encontradas: "..cnt); imgui.Separator(); imgui.BeginChild("ProfListInfo",imgui.ImVec2(0,0),true); draw_profession_header(); 
     local function rend_p(l,h,c) 
         if #l>0 then 
             imgui.TextColored(c,h); imgui.Spacing(); 
             local nw=250; local lw=100; local salw=110; 
-            local sc=IMAGE_GREY; local st="|"; local stw=imgui.CalcTextSize(st).x; local sp=imgui.GetStyle().ItemSpacing.x; 
+            local sc=UI_COLORS.GREY; local st="|"; local stw=imgui.CalcTextSize(st).x; local sp=imgui.GetStyle().ItemSpacing.x; 
             local p1s=nw; local p2ls=p1s+stw+sp; local p2s=p2ls+lw; local p3ss=p2s+stw+sp; local p3s=p3ss+salw; local p4as=p3s+stw+sp; 
             for _,p in ipairs(l) do 
                 local curX = imgui.GetCursorPosX()
                 local lbl=string.format("##pli_%s%d",p.name or "u", p.level or 0); 
-                imgui.Selectable(lbl,false,imgui.SelectableFlags_SpanAllColumns,imgui.ImVec2(0,imgui.GetTextLineHeight())); 
+                imgui.Selectable(lbl,false,SpanAllColumns,imgui.ImVec2(0,imgui.GetTextLineHeight())); 
                 imgui.SetItemAllowOverlap()
                 if imgui.IsItemHovered() and imgui.IsMouseDoubleClicked(0) then 
                     sampSendChat(string.format("/setprof %d", p.id)); 
@@ -1534,7 +2087,7 @@ local function draw_professions_content(search_val, compact)
                 imgui.SameLine(p1s); imgui.TextColored(sc,st); 
                 imgui.SameLine(p2ls); imgui.Text(tostring(p.level or "?")); 
                 imgui.SameLine(p2s); imgui.TextColored(sc,st); 
-                imgui.SameLine(p3ss); imgui.TextColored(IMAGE_YELLOW,"$"..formatPrice(p.salary or 0)) 
+                imgui.SameLine(p3ss); imgui.TextColored(UI_COLORS.YELLOW,"$"..formatPrice(p.salary or 0)) 
                 imgui.SameLine(p3s); imgui.TextColored(sc,st); 
                 imgui.SameLine(p4as); 
                 if imgui.SmallButton("Aplicar##"..p.id) then 
@@ -1554,10 +2107,10 @@ local function draw_professions_content(search_val, compact)
         end 
     end; 
     if cnt==0 then imgui.Text("Nenhuma.") else 
-        local sc=IMAGE_GREY; local st="|"; local stw=imgui.CalcTextSize(st).x; local sp=imgui.GetStyle().ItemSpacing.x; 
-        if selected_prof_type == "Todas" or selected_prof_type == "Honestas" then rend_p(leg,"--- Honestas ---",IMAGE_GREEN) end
+        local sc=UI_COLORS.GREY; local st="|"; local stw=imgui.CalcTextSize(st).x; local sp=imgui.GetStyle().ItemSpacing.x; 
+        if selected_prof_type == "Todas" or selected_prof_type == "Honestas" then rend_p(leg,"--- Honestas ---",UI_COLORS.GREEN) end
         if selected_prof_type == "Todas" and #leg>0 and #maf>0 then imgui.Spacing(); imgui.Separator(); imgui.Spacing() end
-        if selected_prof_type == "Todas" or selected_prof_type == "Mafia" then rend_p(maf,"--- Mafia ---",IMAGE_RED) end
+        if selected_prof_type == "Todas" or selected_prof_type == "Mafia" then rend_p(maf,"--- Mafia ---",UI_COLORS.RED) end
     end; 
     imgui.EndChild()
 end
@@ -1595,13 +2148,13 @@ local function draw_vehicles_content(search_val, compact)
     local cnt=#filt_v; imgui.Text("Veículos: "..cnt); imgui.Separator();
     imgui.BeginChild("VehListInfo",imgui.ImVec2(0,0),true); draw_vehicle_header(); if cnt==0 then imgui.Text("Nenhum.") else 
         local idw=50; local nw=180; local pw=110; local swid=110; local typew=100; 
-        local sc=IMAGE_GREY; local st="|"; local stw=imgui.CalcTextSize(st).x; local sp=imgui.GetStyle().ItemSpacing.x; 
+        local sc=UI_COLORS.GREY; local st="|"; local stw=imgui.CalcTextSize(st).x; local sp=imgui.GetStyle().ItemSpacing.x; 
         local align_offset = imgui.GetStyle().FramePadding.x
         local p1s=idw; local p2ns=p1s+stw+sp; local p2s=p2ns+nw; local p3ps=p2s+stw+sp; local p3s=p3ps+pw; local p4ss=p3s+stw+sp; local p4s=p4ss+swid; local p5ts=p4s+stw+sp; local p5s=p5ts+typew; local p6as=p5s+stw+sp; 
         for _,v in ipairs(filt_v) do 
             local curX = imgui.GetCursorPosX()
             local lbl=string.format("##vli_%d",v.id); 
-            imgui.Selectable(lbl,false,imgui.SelectableFlags_SpanAllColumns,imgui.ImVec2(0,imgui.GetTextLineHeight())); 
+            imgui.Selectable(lbl,false,SpanAllColumns,imgui.ImVec2(0,imgui.GetTextLineHeight())); 
             imgui.SetItemAllowOverlap()
             if imgui.IsItemHovered() and imgui.IsMouseDoubleClicked(0) then 
                 sampSendChat("/cv "..v.id)
@@ -1610,9 +2163,9 @@ local function draw_vehicles_content(search_val, compact)
             local p_str=(v.price and v.price>0) and ("$"..formatPrice(v.price)) or "0"; local s_str=v.speed and (v.speed.." km/h") or "?"; local t_str=v.type or "?"; 
             imgui.SameLine(curX + align_offset); imgui.Text(tostring(v.id)); 
             imgui.SameLine(p1s); imgui.TextColored(sc,st); imgui.SameLine(p2ns + align_offset); imgui.Text(v.name); 
-            imgui.SameLine(p2s); imgui.TextColored(sc,st); imgui.SameLine(p3ps + align_offset); imgui.TextColored(IMAGE_YELLOW,p_str); 
-            imgui.SameLine(p3s); imgui.TextColored(sc,st); imgui.SameLine(p4ss + align_offset); imgui.TextColored(IMAGE_PINK,s_str); 
-            imgui.SameLine(p4s); imgui.TextColored(sc,st); imgui.SameLine(p5ts + align_offset); imgui.TextColored(IMAGE_BLUE,t_str) 
+            imgui.SameLine(p2s); imgui.TextColored(sc,st); imgui.SameLine(p3ps + align_offset); imgui.TextColored(UI_COLORS.YELLOW,p_str); 
+            imgui.SameLine(p3s); imgui.TextColored(sc,st); imgui.SameLine(p4ss + align_offset); imgui.TextColored(UI_COLORS.PINK,s_str); 
+            imgui.SameLine(p4s); imgui.TextColored(sc,st); imgui.SameLine(p5ts + align_offset); imgui.TextColored(UI_COLORS.BLUE,t_str) 
             imgui.SameLine(p5s); imgui.TextColored(sc,st); imgui.SameLine(p6as); 
             if imgui.SmallButton("Criar##btn_v_"..v.id) then 
                 sampSendChat("/cv "..v.id)
@@ -1625,13 +2178,13 @@ end
 local function draw_skins_content(search_val, compact)
     local search_norm = remove_accents(search_val or state.search_text.v)
     if not compact then imgui.TextDisabled("Lista de skins. Defina o ID alvo acima e duplo clique para aplicar.") end
-    if not skin_search_map then imgui.TextColored(IMAGE_RED,"Erro!") else local filt_s=filter_skins(search_norm); local cnt=#filt_s; imgui.Text("Skins: "..cnt); imgui.Separator(); imgui.BeginChild("SkinListInfo",imgui.ImVec2(0,0),true); draw_skin_header(); if cnt==0 then imgui.Text("Nenhuma.") else 
-        local idw=50; local namew=200; local sc=IMAGE_GREY; local st="|"; local stw=imgui.CalcTextSize(st).x; local sp=imgui.GetStyle().ItemSpacing.x; 
+    if not skin_search_map then imgui.TextColored(UI_COLORS.RED,"Erro!") else local filt_s=filter_skins(search_norm); local cnt=#filt_s; imgui.Text("Skins: "..cnt); imgui.Separator(); imgui.BeginChild("SkinListInfo",imgui.ImVec2(0,0),true); draw_skin_header(); if cnt==0 then imgui.Text("Nenhuma.") else 
+        local idw=50; local namew=200; local sc=UI_COLORS.GREY; local st="|"; local stw=imgui.CalcTextSize(st).x; local sp=imgui.GetStyle().ItemSpacing.x; 
         local p1s=idw; local p2ns=p1s+stw+sp; local p2s=p2ns+namew; local p3as=p2s+stw+sp; 
         for _,s in ipairs(filt_s) do 
             local curX = imgui.GetCursorPosX()
             local lbl=string.format("##sli_%d",s.id); 
-            imgui.Selectable(lbl,false,imgui.SelectableFlags_SpanAllColumns,imgui.ImVec2(0,imgui.GetTextLineHeight())); 
+            imgui.Selectable(lbl,false,SpanAllColumns,imgui.ImVec2(0,imgui.GetTextLineHeight())); 
             imgui.SetItemAllowOverlap()
             if imgui.IsItemHovered() and imgui.IsMouseDoubleClicked(0) then 
                 local tid=tonumber(state.target_id_buf.v); 
@@ -1665,12 +2218,12 @@ local function draw_weapons_content(search_val, compact)
     local selected_w_type = weapon_types[state.weapon_type_filter_idx.v + 1]
     local filt_w=filter_weapons(weapons_list,search_norm,selected_w_type); local cnt=#filt_w; imgui.Text("Armas: "..cnt); imgui.Separator(); imgui.BeginChild("WeaponListInfo",imgui.ImVec2(0,0),true); draw_weapon_header(); if cnt==0 then imgui.Text("Nenhuma.") else 
         local idw=60; local nw=200; local typew=120; 
-        local sc=IMAGE_GREY; local st="|"; local stw=imgui.CalcTextSize(st).x; local sp=imgui.GetStyle().ItemSpacing.x; 
+        local sc=UI_COLORS.GREY; local st="|"; local stw=imgui.CalcTextSize(st).x; local sp=imgui.GetStyle().ItemSpacing.x; 
         local p1s=idw; local p2ns=p1s+stw+sp; local p2s=p2ns+nw; local p3ts=p2s+stw+sp; local p3s=p3ts+typew; local p4as=p3s+stw+sp; 
         for _,w in ipairs(filt_w) do 
             local curX = imgui.GetCursorPosX()
             local lbl=string.format("##wli_%d",w.id); 
-            imgui.Selectable(lbl,false,imgui.SelectableFlags_SpanAllColumns,imgui.ImVec2(0,imgui.GetTextLineHeight())); 
+            imgui.Selectable(lbl,false,SpanAllColumns,imgui.ImVec2(0,imgui.GetTextLineHeight())); 
             imgui.SetItemAllowOverlap()
             if imgui.IsItemHovered() and imgui.IsMouseDoubleClicked(0) then 
                 local tid=tonumber(state.target_id_buf.v); local ammo=tonumber(state.ammo_amount_buf.v) or 500; 
@@ -1682,7 +2235,7 @@ local function draw_weapons_content(search_val, compact)
             end; 
             imgui.SameLine(curX); imgui.Text(tostring(w.id)); 
             imgui.SameLine(p1s); imgui.TextColored(sc,st); imgui.SameLine(p2ns); imgui.Text(w.name or "?"); 
-            imgui.SameLine(p2s); imgui.TextColored(sc,st); imgui.SameLine(p3ts); imgui.TextColored(IMAGE_BLUE,w.type or "?") 
+            imgui.SameLine(p2s); imgui.TextColored(sc,st); imgui.SameLine(p3ts); imgui.TextColored(UI_COLORS.BLUE,w.type or "?") 
             imgui.SameLine(p3s); imgui.TextColored(sc,st); imgui.SameLine(p4as); 
             if imgui.SmallButton("Setar##btn_w_"..w.id) then 
                 local tid=tonumber(state.target_id_buf.v); local ammo=tonumber(state.ammo_amount_buf.v) or 500; 
@@ -1697,7 +2250,7 @@ local function draw_weapons_content(search_val, compact)
 end
 
 local function draw_info_tab()
-    local sub_tabs={{1,"Profissões"},{2,"Veículos"},{3,"Skins"},{4,"Armas"},{5,"Dúvidas"},{6,"Links"}}; local sub_space=(imgui.GetWindowWidth()-25)/#sub_tabs; local sub_btn_w=imgui.ImVec2(math.floor(sub_space)-5,22); local act_bg=IMAGE_WHITE; local act_hov=imgui.ImVec4(.8,.8,.8,1); local act_txt=IMAGE_BLACK; local inact_bg=imgui.GetStyle().Colors[imgui.Col.Button]; local inact_hov=imgui.GetStyle().Colors[imgui.Col.ButtonHovered]; local inact_txt=imgui.GetStyle().Colors[imgui.Col.Text]
+    local sub_tabs={{1,"Profissões"},{2,"Veículos"},{3,"Skins"},{4,"Armas"},{5,"Dúvidas"},{6,"Links"}}; local sub_space=(imgui.GetWindowWidth()-25)/#sub_tabs; local sub_btn_w=imgui.ImVec2(math.floor(sub_space)-5,22); local act_bg=UI_COLORS.WHITE; local act_hov=imgui.ImVec4(.8,.8,.8,1); local act_txt=UI_COLORS.BLACK; local inact_bg=imgui.GetStyle().Colors[imgui.Col.Button]; local inact_hov=imgui.GetStyle().Colors[imgui.Col.ButtonHovered]; local inact_txt=imgui.GetStyle().Colors[imgui.Col.Text]
     for i,sub in ipairs(sub_tabs) do local sid,snm=sub[1],sub[2]; local is_act=state.active_info_sub_tab==sid; if is_act then imgui.PushStyleColor(imgui.Col.Button,act_bg); imgui.PushStyleColor(imgui.Col.ButtonHovered,act_hov); imgui.PushStyleColor(imgui.Col.ButtonActive,act_hov); imgui.PushStyleColor(imgui.Col.Text,act_txt) else imgui.PushStyleColor(imgui.Col.Button,inact_bg); imgui.PushStyleColor(imgui.Col.ButtonHovered,inact_hov); imgui.PushStyleColor(imgui.Col.ButtonActive,inact_hov); imgui.PushStyleColor(imgui.Col.Text,inact_txt) end; if imgui.Button(snm,sub_btn_w) then state.active_info_sub_tab=sid end; imgui.PopStyleColor(4); if i<#sub_tabs then imgui.SameLine(0,2) end end; imgui.Spacing(); imgui.Separator()
     if state.active_info_sub_tab==3 or state.active_info_sub_tab==4 then imgui.Text("Aplicar em:"); imgui.SameLine(); imgui.PushItemWidth(80); imgui.InputText("ID##TargetID",state.target_id_buf); imgui.PopItemWidth(); imgui.SameLine(); if imgui.Button("Eu") then local _,mid=sampGetPlayerIdByCharHandle(PLAYER_PED); state.target_id_buf.v=tostring(mid) end; if state.active_info_sub_tab==4 then imgui.SameLine(); imgui.Text("Munição:"); imgui.SameLine(); imgui.PushItemWidth(80); imgui.InputText("##AmmoAmount",state.ammo_amount_buf); imgui.PopItemWidth() end; imgui.Spacing() end
 
@@ -1713,7 +2266,7 @@ local function draw_info_tab()
         imgui.TextDisabled("Perguntas frequentes e historico de atualizacoes.")
         draw_faq_tab(state.search_text, "Main")
     elseif state.active_info_sub_tab == 6 then -- Links Uteis
-        imgui.TextColored(IMAGE_GREEN, "Links Uteis do Forum"); imgui.Separator(); imgui.Spacing()
+        imgui.TextColored(UI_COLORS.GREEN, "Links Uteis do Forum"); imgui.Separator(); imgui.Spacing()
         local btn_size = imgui.ImVec2(-1, 30)
         if imgui.Button("Forum - Pagina Inicial", btn_size) then os.execute('explorer "https://www.loskatchorros.com.br/forum/index.php"') end
         if imgui.Button("Regras do Servidor", btn_size) then os.execute('explorer "https://www.loskatchorros.com.br/forum/index.php?/topic/328257-regras-do-servidor/"') end
@@ -1725,18 +2278,18 @@ end
 
 local function draw_locais_tab(search_val, compact)
     local search_norm = remove_accents(search_val or state.search_text.v)
-    local sub_tabs={{1,"Interiores"},{2,"Favoritos"}}; local sub_space=(imgui.GetWindowWidth()-25)/#sub_tabs; local sub_btn_w=imgui.ImVec2(math.floor(sub_space)-5,22); local act_bg=IMAGE_WHITE; local act_hov=imgui.ImVec4(.8,.8,.8,1); local act_txt=IMAGE_BLACK; local inact_bg=imgui.GetStyle().Colors[imgui.Col.Button]; local inact_hov=imgui.GetStyle().Colors[imgui.Col.ButtonHovered]; local inact_txt=imgui.GetStyle().Colors[imgui.Col.Text]
+    local sub_tabs={{1,"Interiores"},{2,"Favoritos"}}; local sub_space=(imgui.GetWindowWidth()-25)/#sub_tabs; local sub_btn_w=imgui.ImVec2(math.floor(sub_space)-5,22); local act_bg=UI_COLORS.WHITE; local act_hov=imgui.ImVec4(.8,.8,.8,1); local act_txt=UI_COLORS.BLACK; local inact_bg=imgui.GetStyle().Colors[imgui.Col.Button]; local inact_hov=imgui.GetStyle().Colors[imgui.Col.ButtonHovered]; local inact_txt=imgui.GetStyle().Colors[imgui.Col.Text]
     for i,sub in ipairs(sub_tabs) do local sid,snm=sub[1],sub[2]; local is_act=state.active_locais_sub_tab==sid; if is_act then imgui.PushStyleColor(imgui.Col.Button,act_bg); imgui.PushStyleColor(imgui.Col.ButtonHovered,act_hov); imgui.PushStyleColor(imgui.Col.ButtonActive,act_hov); imgui.PushStyleColor(imgui.Col.Text,act_txt) else imgui.PushStyleColor(imgui.Col.Button,inact_bg); imgui.PushStyleColor(imgui.Col.ButtonHovered,inact_hov); imgui.PushStyleColor(imgui.Col.ButtonActive,inact_hov); imgui.PushStyleColor(imgui.Col.Text,inact_txt) end; if imgui.Button(snm,sub_btn_w) then state.active_locais_sub_tab=sid end; imgui.PopStyleColor(4); if i<#sub_tabs then imgui.SameLine(0,2) end end; imgui.Spacing(); imgui.Separator()
 
     if state.active_locais_sub_tab == 1 then
         if not compact then imgui.TextDisabled("Interiores do jogo. Duplo clique para ir. Botao direito para favoritar.") end
         local filt_int=filter_interiors(interiors_list,search_norm); local cnt=#filt_int; imgui.Text("Interiores: "..cnt); imgui.Separator(); imgui.BeginChild("IntList",imgui.ImVec2(0,0),true); draw_interior_header(); 
         if cnt==0 then imgui.Text("Nenhum.") else 
-            local nw=300; local cw=200; local sc=IMAGE_GREY; local st="|"; local sw=imgui.CalcTextSize(st).x; local sp=imgui.GetStyle().ItemSpacing.x; local p1s=nw; local p2cs=p1s+sw+sp; local p2s=p2cs+cw; local p3is=p2s+sw+sp; 
+            local nw=300; local cw=200; local sc=UI_COLORS.GREY; local st="|"; local sw=imgui.CalcTextSize(st).x; local sp=imgui.GetStyle().ItemSpacing.x; local p1s=nw; local p2cs=p1s+sw+sp; local p2s=p2cs+cw; local p3is=p2s+sw+sp; 
             for _,i in ipairs(filt_int) do 
                 local curX = imgui.GetCursorPosX()
                 local lbl=string.format("##int_%s%.1f",i.name or "u",i.x or 0); 
-                imgui.Selectable(lbl,false,imgui.SelectableFlags_SpanAllColumns,imgui.ImVec2(0,imgui.GetTextLineHeight())); 
+                imgui.Selectable(lbl,false,SpanAllColumns,imgui.ImVec2(0,imgui.GetTextLineHeight())); 
                 imgui.SetItemAllowOverlap()
                 
                 if imgui.BeginPopupContextItem() then
@@ -1751,7 +2304,7 @@ local function draw_locais_tab(search_val, compact)
                 if imgui.IsItemHovered() and imgui.IsMouseDoubleClicked(0) then local cmd=string.format("/tp %.4f %.4f %.4f %d",i.x,i.y,i.z,i.id); sampSendChat(cmd); sampAddChatMessage(string.format("[PI] TP para %s (ID:%d)",i.name or "?",i.id),-1) end; 
                 if imgui.IsItemHovered() then imgui.SetTooltip("Botao Direito: Favoritar | Duplo Clique: Ir") end
                 
-                imgui.SameLine(curX); imgui.Text(i.name or "?"); imgui.SameLine(p1s); imgui.TextColored(sc,st); imgui.SameLine(p2cs); local ct=string.format("%.1f,%.1f,%.1f",i.x or 0,i.y or 0,i.z or 0); imgui.TextColored(IMAGE_PINK,ct); imgui.SameLine(p2s); imgui.TextColored(sc,st); imgui.SameLine(p3is); imgui.TextColored(IMAGE_BLUE,tostring(i.id or "?")) 
+                imgui.SameLine(curX); imgui.Text(i.name or "?"); imgui.SameLine(p1s); imgui.TextColored(sc,st); imgui.SameLine(p2cs); local ct=string.format("%.1f,%.1f,%.1f",i.x or 0,i.y or 0,i.z or 0); imgui.TextColored(UI_COLORS.PINK,ct); imgui.SameLine(p2s); imgui.TextColored(sc,st); imgui.SameLine(p3is); imgui.TextColored(UI_COLORS.BLUE,tostring(i.id or "?")) 
             end 
         end; imgui.EndChild()
     elseif state.active_locais_sub_tab == 2 then
@@ -1812,7 +2365,7 @@ local function draw_locais_tab(search_val, compact)
         for _, loc in ipairs(filt_evt) do
             local curX = imgui.GetCursorPosX()
             local lbl = string.format("##evt_%s", loc.name)
-            imgui.Selectable(lbl, false, imgui.SelectableFlags_SpanAllColumns, imgui.ImVec2(0, imgui.GetTextLineHeight()))
+            imgui.Selectable(lbl, false, SpanAllColumns, imgui.ImVec2(0, imgui.GetTextLineHeight()))
             imgui.SetItemAllowOverlap()
             
             if imgui.BeginPopupContextItem() then
@@ -1843,9 +2396,9 @@ local function draw_locais_tab(search_val, compact)
 
             imgui.SameLine(curX); imgui.Text(loc.name or "Sem Nome")
             imgui.SameLine(p1s); imgui.TextColored(sc, st)
-            imgui.SameLine(p2cs); imgui.TextColored(IMAGE_PINK, string.format("%.1f, %.1f, %.1f", loc.x, loc.y, loc.z))
+            imgui.SameLine(p2cs); imgui.TextColored(UI_COLORS.PINK, string.format("%.1f, %.1f, %.1f", loc.x, loc.y, loc.z))
             imgui.SameLine(p2s); imgui.TextColored(sc, st)
-            imgui.SameLine(p3is); imgui.TextColored(IMAGE_BLUE, tostring(loc.id or 0))
+            imgui.SameLine(p3is); imgui.TextColored(UI_COLORS.BLUE, tostring(loc.id or 0))
         end
         imgui.EndChild()
 
@@ -1892,14 +2445,85 @@ local function draw_comandos_tab(compact)
 
     if imgui.Button(esp_active and "Desativar ESP" or "Ativar ESP", imgui.ImVec2(150, 30)) then
         esp_active = not esp_active
-        sampAddChatMessage(esp_active and "[PI] ESP Admin Ativado." or "[PI] ESP Admin Desativado.", -1)
+        set_nametag_status(esp_active)
+        sampAddChatMessage(esp_active and "[PI] ESP Admin Ativado (SAMP Tags)." or "[PI] ESP Admin Desativado.", -1)
     end
     imgui.SameLine(); imgui.Text("Wallhack de nome/vida/colete (Estilo SA-MP).")
     
+    if imgui.Button(prof_tags_active and "Desativar Tags Profissao" or "Ativar Tags Profissao", imgui.ImVec2(150, 30)) then
+        prof_tags_active = not prof_tags_active
+        sampAddChatMessage(prof_tags_active and "[PI] Tags de Profissao Ativadas." or "[PI] Tags de Profissao Desativadas.", -1)
+    end
+    imgui.SameLine(); imgui.Text("Mostra apenas a profissao/cargo acima da cabeca.")
+
     local dist_esp = imgui.ImFloat(cfg.main.esp_distance)
     if imgui.SliderFloat("Distancia ESP", dist_esp, 100.0, 30000.0, "%.0f") then
         cfg.main.esp_distance = dist_esp.v
+        if esp_active and sampSetNameTagDrawDistance then sampSetNameTagDrawDistance(cfg.main.esp_distance) end
+    end
+
+    local show_prof = imgui.ImBool(cfg.main.esp_show_prof)
+    if imgui.Checkbox("Mostrar Profissao no ESP", show_prof) then
+        cfg.main.esp_show_prof = show_prof.v
         inicfg.save(cfg, "PainelInfo_Config_v8.ini")
+    end
+    
+    local side_list = imgui.ImBool(cfg.main.esp_side_list)
+    if imgui.Checkbox("Lista Lateral de Profissoes", side_list) then
+        cfg.main.esp_side_list = side_list.v
+        inicfg.save(cfg, "PainelInfo_Config_v8.ini")
+    end
+    
+    if cfg.main.esp_side_list then
+        local side_x = imgui.ImInt(cfg.main.esp_side_list_x or 10)
+        if imgui.SliderInt("Posicao Lista X", side_x, 0, 1920) then
+            cfg.main.esp_side_list_x = side_x.v
+        end
+        local side_y = imgui.ImInt(cfg.main.esp_side_list_y or 0)
+        if imgui.SliderInt("Posicao Lista Y (Offset)", side_y, -500, 500) then
+            cfg.main.esp_side_list_y = side_y.v
+        end
+        local side_font = imgui.ImInt(cfg.main.esp_side_list_font_size or 7)
+        if imgui.SliderInt("Tamanho Fonte Lista", side_font, 5, 20) then
+            cfg.main.esp_side_list_font_size = side_font.v
+            prof_font = renderCreateFont('Arial', cfg.main.esp_side_list_font_size, 5)
+        end
+        local side_fist = imgui.ImBool(cfg.main.esp_side_list_show_fist)
+        if imgui.Checkbox("Mostrar 'Punhos' na Lista", side_fist) then
+            cfg.main.esp_side_list_show_fist = side_fist.v
+            inicfg.save(cfg, "PainelInfo_Config_v8.ini")
+        end
+    end
+
+
+    local prof_offset = imgui.ImInt(cfg.main.esp_prof_offset or 0)
+    if imgui.SliderInt("Altura Tag Profissao", prof_offset, -50, 50) then
+        cfg.main.esp_prof_offset = prof_offset.v
+    end
+
+    local col_val = tonumber(cfg.main.esp_prof_bg_color) or 0xE0000000
+    local a = bit.band(bit.rshift(col_val, 24), 0xFF)
+    local r = bit.band(bit.rshift(col_val, 16), 0xFF)
+    local g = bit.band(bit.rshift(col_val, 8), 0xFF)
+    local b = bit.band(col_val, 0xFF)
+    local bg_color_vec = imgui.ImFloat4(r/255, g/255, b/255, a/255)
+    if bg_color_vec then
+        if imgui.ColorEdit4("Cor Fundo Tag", bg_color_vec) then
+            local v1, v2, v3, v4
+            if bg_color_vec.v then v1, v2, v3, v4 = bg_color_vec.v[1], bg_color_vec.v[2], bg_color_vec.v[3], bg_color_vec.v[4]
+            else v1, v2, v3, v4 = bg_color_vec.x, bg_color_vec.y, bg_color_vec.z, bg_color_vec.w end
+            
+            local new_r = math.floor((v1 or 0) * 255)
+            local new_g = math.floor((v2 or 0) * 255)
+            local new_b = math.floor((v3 or 0) * 255)
+            local new_a = math.floor((v4 or 1) * 255)
+            cfg.main.esp_prof_bg_color = bit.bor(bit.lshift(new_a, 24), bit.lshift(new_r, 16), bit.lshift(new_g, 8), new_b)
+        end
+        imgui.SameLine()
+        if imgui.Button("Salvar##Color") then
+            inicfg.save(cfg, "PainelInfo_Config_v8.ini")
+            sampAddChatMessage("[PI] Cor salva!", -1)
+        end
     end
 
     imgui.Separator()
@@ -1912,6 +2536,8 @@ local function draw_comandos_tab(compact)
         imgui.PopItemWidth()
         imgui.SameLine()
         imgui.Checkbox("Verif. Duplicados", state.ip_extractor_check_dupes)
+        imgui.SameLine()
+        imgui.Checkbox("Salvar Auto (.txt)", state.ip_extractor_auto_save)
         imgui.SameLine()
         if imgui.Button("Iniciar", imgui.ImVec2(80, 25)) then
             local total = tonumber(state.ip_extractor_total_buf.v)
@@ -1993,16 +2619,16 @@ function imgui.OnDrawFrame()
         
         imgui.Begin("Painel Admin [F12] - v" .. thisScript().version, state.window_open)
 
-        local tabs = { {1, "Novatos"}, {2, "Online"}, {4, "Informações"}, {9, "Locais"}, {13, "Comandos"}, {11, "Config"} }; local btn_space = imgui.GetWindowWidth() / #tabs; local btn_w = imgui.ImVec2(math.floor(btn_space) - 5, 25); local act_bg=IMAGE_WHITE; local act_hov=imgui.ImVec4(.8,.8,.8,1); local act_txt=IMAGE_BLACK; local inact_bg=imgui.GetStyle().Colors[imgui.Col.Button]; local inact_hov=imgui.GetStyle().Colors[imgui.Col.ButtonHovered]; local inact_txt=imgui.GetStyle().Colors[imgui.Col.Text]
+        local tabs = { {1, "Novatos"}, {2, "Online"}, {4, "Informações"}, {9, "Locais"}, {13, "Comandos"}, {11, "Config"} }; local btn_space = imgui.GetWindowWidth() / #tabs; local btn_w = imgui.ImVec2(math.floor(btn_space) - 5, 25); local act_bg=UI_COLORS.WHITE; local act_hov=imgui.ImVec4(.8,.8,.8,1); local act_txt=UI_COLORS.BLACK; local inact_bg=imgui.GetStyle().Colors[imgui.Col.Button]; local inact_hov=imgui.GetStyle().Colors[imgui.Col.ButtonHovered]; local inact_txt=imgui.GetStyle().Colors[imgui.Col.Text]
         for i, tab in ipairs(tabs) do local tid, tnm = tab[1], tab[2]; local is_act = state.active_tab == tid; if is_act then imgui.PushStyleColor(imgui.Col.Button,act_bg); imgui.PushStyleColor(imgui.Col.ButtonHovered,act_hov); imgui.PushStyleColor(imgui.Col.ButtonActive,act_hov); imgui.PushStyleColor(imgui.Col.Text,act_txt) else imgui.PushStyleColor(imgui.Col.Button,inact_bg); imgui.PushStyleColor(imgui.Col.ButtonHovered,inact_hov); imgui.PushStyleColor(imgui.Col.ButtonActive,inact_hov); imgui.PushStyleColor(imgui.Col.Text,inact_txt) end; if imgui.Button(tnm, btn_w) then if state.active_tab ~= tid then state.active_tab=tid end end; imgui.PopStyleColor(4); if i < #tabs then imgui.SameLine(0, 2) end end; imgui.Separator(); imgui.Text(string.format("Hora: %s", os.date("%H:%M:%S"))); 
         imgui.SameLine()
         HelpMarker("GUIA RAPIDO DO PAINEL:\n\n[Novatos/Online]\n- Lista jogadores e Staff.\n- Botao Direito no nome: Opcoes (Ir, Espiar, IP, Docs).\n- Filtros: PC/Mobile, Mafia/Honestas.\n\n[Informacoes]\n- Listas de IDs (Veiculos, Skins, Armas).\n- Duplo Clique: Cria veiculo, seta skin ou da arma.\n- Botoes 'Aplicar': Executam a acao no ID alvo.\n\n[Locais]\n- Interiores: Lista de interiores do jogo (Duplo clique para ir).\n- Favoritos: Salve sua posicao atual ou gerencie locais.\n\n[Comandos]\n- Atalhos uteis (/painelevento, /comandosadm).\n- Ferramentas: ESP (Wallhack) e Extrator de IPs.\n\n[Config]\n- Temas, Transparencia e Senha Admin.")
         imgui.Spacing()
-        local _, myid = sampGetPlayerIdByCharHandle(PLAYER_PED); if myid then local mynick=sampGetPlayerNickname(myid) or "?"; imgui.TextColored(IMAGE_YELLOW, string.format("Voce: %s (ID: %d)", u8(mynick), myid)); imgui.Spacing() end
+        local _, myid = sampGetPlayerIdByCharHandle(PLAYER_PED); if myid then local mynick=sampGetPlayerNickname(myid) or "?"; imgui.TextColored(UI_COLORS.YELLOW, string.format("Voce: %s (ID: %d)", u8(mynick), myid)); imgui.Spacing() end
 
         local search_lbl = ""; local show_search = true
         if state.active_tab == 1 then search_lbl="Pesq. Novato" elseif state.active_tab == 2 then search_lbl="Pesq. Online" elseif state.active_tab == 4 then if state.active_info_sub_tab == 1 then search_lbl="Pesq. Prof" elseif state.active_info_sub_tab == 2 then search_lbl="Pesq. Veh" elseif state.active_info_sub_tab == 3 then search_lbl="Pesq. Skin" elseif state.active_info_sub_tab == 4 then search_lbl="Pesq. Arma" elseif state.active_info_sub_tab == 5 then search_lbl="Pesq. FAQ" elseif state.active_info_sub_tab == 6 then show_search = false else search_lbl="Pesq." end elseif state.active_tab == 9 then if state.active_locais_sub_tab == 1 then search_lbl="Pesq. Interior" else search_lbl="Pesq. Favorito" end elseif state.active_tab == 11 or state.active_tab == 13 then show_search = false else search_lbl="Pesq." end
-        if show_search then imgui.InputText(search_lbl, state.search_text, imgui.ImVec2(300, 0)); imgui.Spacing() elseif state.active_tab ~= 11 and (state.active_tab ~= 4 or state.active_info_sub_tab ~= 5) then imgui.TextColored(IMAGE_GREY,"Selecione topico."); imgui.Spacing() end
+        if show_search then imgui.InputText(search_lbl, state.search_text, imgui.ImVec2(300, 0)); imgui.Spacing() elseif state.active_tab ~= 11 and (state.active_tab ~= 4 or state.active_info_sub_tab ~= 5) then imgui.TextColored(UI_COLORS.GREY,"Selecione topico."); imgui.Spacing() end
 
         if state.active_tab == 1 or state.active_tab == 2 then
             draw_players_tab()
@@ -2147,7 +2773,12 @@ sampRegisterChatCommand("cadm", function() sampSendChat("/comandosadm") end)
 sampRegisterChatCommand("cadmin", function() sampSendChat("/comandosadm") end)
 sampRegisterChatCommand("admesp", function() 
     esp_active = not esp_active
-    sampAddChatMessage(esp_active and "[PI] ESP Admin Ativado." or "[PI] ESP Admin Desativado.", -1)
+    set_nametag_status(esp_active)
+    sampAddChatMessage(esp_active and "[PI] ESP Admin Ativado (SAMP Tags)." or "[PI] ESP Admin Desativado.", -1)
+end)
+sampRegisterChatCommand("proftags", function() 
+    prof_tags_active = not prof_tags_active
+    sampAddChatMessage(prof_tags_active and "[PI] Tags de Profissao Ativadas." or "[PI] Tags de Profissao Desativadas.", -1)
 end)
 sampRegisterChatCommand("verversao", function() check_update(true) end)
 sampRegisterChatCommand("duvidas", function() state.window_duvidas.v = not state.window_duvidas.v; check_process() end)
@@ -2163,7 +2794,7 @@ sampRegisterChatCommand("limparchat", function()
 end)
 
 function main()
-    while not isSampfuncsLoaded() do wait(100) end; while not isSampAvailable() do wait(100) end; imgui.Process = state.window_open.v
+    while not isSampfuncsLoaded() do wait(100) end; while not isSampAvailable() do wait(100) end; check_process()
     
     -- Criar backup da configuração ao iniciar
     if backup_config then backup_config() end
@@ -2185,7 +2816,14 @@ function main()
     end
 
     while true do wait(0)
-        draw_esp_logic() -- Desenha o ESP se estiver ativo
+        local status, err = pcall(draw_esp_logic)
+        if not status then
+            print("[PainelInfo] Erro no ESP: " .. tostring(err))
+            esp_active = false
+            set_nametag_status(false)
+            sampAddChatMessage("[PI] Erro critico no ESP: " .. tostring(err), 0xFF0000)
+        end
+
         if waiting_for_bind then
             for k = 1, 255 do
                 if wasKeyPressed(k) then
@@ -2196,11 +2834,18 @@ function main()
                     break
                 end
             end
-        elseif wasKeyPressed(cfg.main.bind) and not sampIsChatInputActive() and not sampIsDialogActive() then toggle_window() end; imgui.Process = state.window_open.v
+        elseif wasKeyPressed(cfg.main.bind) and not sampIsChatInputActive() and not sampIsDialogActive() then toggle_window() end
         if isKeyDown(vkeys.VK_MENU) and wasKeyPressed(vkeys.VK_L) and not sampIsChatInputActive() and not sampIsDialogActive() then
             start_admin_login()
         end
 
         check_process() -- Garante que o estado do cursor seja sempre atualizado
+    end
+end
+
+function onScriptTerminate(script, quit)
+    if script == thisScript() then
+        set_nametag_status(false)
+        inicfg.save(cfg, "PainelInfo_Config_v8.ini")
     end
 end

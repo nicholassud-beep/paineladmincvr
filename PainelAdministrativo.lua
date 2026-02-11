@@ -15,8 +15,8 @@ local u8 = function(s) return s and encoding.UTF8(s) or "" end
 
 script_name("PainelInfoHelper")
 script_author("Gerado por ChatGPT - Consolidado por Gemini")
-script_version("1.1.38-WallhackFix")
-local script_ver_num = 1138
+script_version("1.1.41")
+local script_ver_num = 1141
 script_version_number(script_ver_num)
 
 -- VARIAVEIS DO ADMIN ESP (INTEGRACAO)
@@ -248,7 +248,7 @@ local function set_nametag_status(enable)
                 memory.fill(samp + 458280, 0x90, 2, true)
                 memory.fill(samp + 462648, 0x90, 2, true)
                 memory.fill(samp + 462372, 0x90, 6, true)
-                sampSetNameTagDrawDistance(cfg.main.esp_distance)
+                if sampSetNameTagDrawDistance then sampSetNameTagDrawDistance(cfg.main.esp_distance) end
             else
                 -- Restore (Restaura valores originais)
                 memory.write(samp + 457971, 0x24216591, 4, true)
@@ -259,7 +259,7 @@ local function set_nametag_status(enable)
                 memory.write(samp + 462648, 0x6174, 2, true)
                 memory.write(samp + 462372, 0x24218127, 4, true)
                 memory.write(samp + 462376, 0x0000, 2, true)
-                sampSetNameTagDrawDistance(70.0)
+                if sampSetNameTagDrawDistance then sampSetNameTagDrawDistance(70.0) end
             end
             print("[PainelInfoHelper] Wallhack (R1 Fix) " .. (enable and "Ativado" or "Desativado"))
         else
@@ -285,10 +285,10 @@ local function set_nametag_status(enable)
                 local addr = samp + detected.off
                 if enable then
                     memory.write(addr, detected.on, 2, true)
-                    sampSetNameTagDrawDistance(cfg.main.esp_distance)
+                    if sampSetNameTagDrawDistance then sampSetNameTagDrawDistance(cfg.main.esp_distance) end
                 else
                     memory.write(addr, detected.off_val, 2, true)
-                    sampSetNameTagDrawDistance(70.0)
+                    if sampSetNameTagDrawDistance then sampSetNameTagDrawDistance(70.0) end
                 end
                 print("[PainelInfoHelper] Wallhack (" .. detected.ver .. ") " .. (enable and "Ativado" or "Desativado"))
             else
@@ -410,6 +410,9 @@ local function draw_esp_logic()
                                                         local maxW = 0
                                                         for _, l in ipairs(lines) do local w = renderGetFontDrawTextLength(prof_font, l); if w > maxW then maxW = w end end
                                                         local totalH = #lines * 10
+                                                    
+                                                    local bg_col = cfg.main.esp_prof_bg_color or 0xE0000000
+                                                    renderDrawBox(headX - (maxW / 2) - 2, currentY - 1, maxW + 4, totalH + 2, bg_col)
                                                 
                                                 local pColor = sampGetPlayerColor(id)
                                                 if pColor == 0 then pColor = 0xFFFFFFFF end
@@ -522,6 +525,15 @@ local faq_list = {
 }
 
 local changelog_list = {
+    { version = "1.1.41", date = "11/02/2026", changes = {
+        "Correcao: Protecao contra crash ao ajustar distancia (funcao inexistente).",
+    }},
+    { version = "1.1.40", date = "11/02/2026", changes = {
+        "Correcao: Removido salvamento excessivo nos sliders que causava crash.",
+    }},
+    { version = "1.1.39", date = "11/02/2026", changes = {
+        "Correcao: Cor de fundo da tag de profissao agora funciona corretamente.",
+    }},
     { version = "1.1.38", date = "11/02/2026", changes = {
         "Melhoria: Implementado novo sistema de Wallhack (Tags nativas do SAMP via memoria).",
     }},
@@ -1475,8 +1487,7 @@ local function draw_comandos_tab()
     local dist_esp = imgui.ImFloat(cfg.main.esp_distance)
     if imgui.SliderFloat("Distancia ESP", dist_esp, 100.0, 30000.0, "%.0f") then
         cfg.main.esp_distance = dist_esp.v
-        if esp_active then sampSetNameTagDrawDistance(cfg.main.esp_distance) end
-        inicfg.save(cfg, "PainelInfoHelper_Config.ini")
+        if esp_active and sampSetNameTagDrawDistance then sampSetNameTagDrawDistance(cfg.main.esp_distance) end
     end
     
     local show_prof = imgui.ImBool(cfg.main.esp_show_prof)
@@ -1495,18 +1506,15 @@ local function draw_comandos_tab()
         local side_x = imgui.ImInt(cfg.main.esp_side_list_x or 10)
         if imgui.SliderInt("Posicao Lista X", side_x, 0, 1920) then
             cfg.main.esp_side_list_x = side_x.v
-            inicfg.save(cfg, "PainelInfoHelper_Config.ini")
         end
         local side_y = imgui.ImInt(cfg.main.esp_side_list_y or 0)
         if imgui.SliderInt("Posicao Lista Y (Offset)", side_y, -500, 500) then
             cfg.main.esp_side_list_y = side_y.v
-            inicfg.save(cfg, "PainelInfoHelper_Config.ini")
         end
         local side_font = imgui.ImInt(cfg.main.esp_side_list_font_size or 7)
         if imgui.SliderInt("Tamanho Fonte Lista", side_font, 5, 20) then
             cfg.main.esp_side_list_font_size = side_font.v
             prof_font = renderCreateFont('Arial', cfg.main.esp_side_list_font_size, 5)
-            inicfg.save(cfg, "PainelInfoHelper_Config.ini")
         end
         local side_fist = imgui.ImBool(cfg.main.esp_side_list_show_fist)
         if imgui.Checkbox("Mostrar 'Punhos' na Lista", side_fist) then
@@ -1518,7 +1526,6 @@ local function draw_comandos_tab()
     local prof_offset = imgui.ImInt(cfg.main.esp_prof_offset or 0)
     if imgui.SliderInt("Altura Tag Profissao", prof_offset, -50, 50) then
         cfg.main.esp_prof_offset = prof_offset.v
-        inicfg.save(cfg, "PainelInfoHelper_Config.ini")
     end
 
     local col_val = tonumber(cfg.main.esp_prof_bg_color) or 0xE0000000
@@ -2139,5 +2146,6 @@ end
 function onScriptTerminate(script, quit)
     if script == thisScript() then
         set_nametag_status(false)
+        inicfg.save(cfg, "PainelInfoHelper_Config.ini")
     end
 end
