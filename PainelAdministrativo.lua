@@ -15,8 +15,8 @@ local u8 = function(s) return s and encoding.UTF8(s) or "" end
 
 script_name("PainelInfoHelper")
 script_author("Gerado por ChatGPT - Consolidado por Gemini")
-script_version("1.1.41")
-local script_ver_num = 1141
+script_version("1.1.46")
+local script_ver_num = 1146
 script_version_number(script_ver_num)
 
 -- VARIAVEIS DO ADMIN ESP (INTEGRACAO)
@@ -26,6 +26,8 @@ local esp_font = renderCreateFont('Arial', 10, 5) -- Arial 10 com Borda
 local prof_font = nil -- Inicializado apos carregar config
 local esp_spectate_id = -1
 local esp_spectate_vehicle_id = -1
+local last_shot_times = {}
+local last_shot_weapons = {}
 local weapon_names_esp = {
     [0]="Punhos", [1]="Soco Ingles", [2]="Taco de Golf", [3]="Cassetete", [4]="Faca", [5]="Taco de Basebol",
     [6]="Pa", [7]="Taco de Bilhar", [8]="Katana", [9]="Serra Eletrica", [10]="Dildo Roxo", [11]="Dildo Branco",
@@ -388,6 +390,18 @@ local function draw_esp_logic()
                 if headX and headY then
                     local currentY = headY
 
+                    if isCharShooting(handle) then
+                        last_shot_times[id] = os.clock()
+                        last_shot_weapons[id] = getCurrentCharWeapon(handle)
+                    end
+
+                    if last_shot_times[id] and (os.clock() - last_shot_times[id] < 1.0) then
+                        local wep_name = weapon_names_esp[last_shot_weapons[id]] or "Arma"
+                        local shoot_text = "[ATIRANDO: " .. wep_name .. "]"
+                        local sW = renderGetFontDrawTextLength(esp_font, shoot_text)
+                        renderFontDrawText(esp_font, shoot_text, headX - (sW / 2), currentY - 12, 0xFFFF0000)
+                    end
+
                                     local nick = sampGetPlayerNickname(id) or "Unknown"
 
                                     currentY = currentY + (cfg.main.esp_prof_offset or 0)
@@ -525,6 +539,21 @@ local faq_list = {
 }
 
 local changelog_list = {
+    { version = "1.1.46", date = "11/02/2026", changes = {
+        "Melhoria: Aviso '[ATIRANDO]' agora mostra o nome da arma.",
+    }},
+    { version = "1.1.45", date = "11/02/2026", changes = {
+        "Removido: Opcao 'Linhas de Mira' (Tracers) pois nao funcionou como esperado.",
+    }},
+    { version = "1.1.44", date = "11/02/2026", changes = {
+        "Novo: Adicionada opcao 'Linhas de Mira' (Tracers) no ESP.",
+    }},
+    { version = "1.1.43", date = "11/02/2026", changes = {
+        "Melhoria: Aviso '[ATIRANDO]' agora permanece por 1s para evitar piscar.",
+    }},
+    { version = "1.1.42", date = "11/02/2026", changes = {
+        "Novo: Adicionado aviso visual '[ATIRANDO]' no ESP quando um jogador dispara.",
+    }},
     { version = "1.1.41", date = "11/02/2026", changes = {
         "Correcao: Protecao contra crash ao ajustar distancia (funcao inexistente).",
     }},
@@ -937,9 +966,7 @@ function sampev.onServerMessage(color, text)
                     log_text = string.format("Nick: %s (ID: %d) | %s", info.name, info.id, text)
                 end
             end
-            if state.ip_extractor_auto_save.v then
-                logFoundIP(log_text)
-            end
+            logFoundIP(log_text) -- Salva sempre que encontrar, a funcao logFoundIP gerencia o arquivo
             if state.ip_extractor_check_dupes.v then
                 if not state.extracted_ips[ip] then state.extracted_ips[ip] = {} end
                 table.insert(state.extracted_ips[ip], { txt = log_text, info = p_info })
@@ -1039,9 +1066,7 @@ function sampev.onShowDialog(id, style, title, button1, button2, text)
                     log_text = string.format("Nick: %s (ID: %d) | %s", info.name, info.id, log_text)
                 end
             end
-            if state.ip_extractor_auto_save.v then
-                logFoundIP(log_text)
-            end
+            logFoundIP(log_text) -- Salva sempre que encontrar
             if state.ip_extractor_check_dupes.v then
                 if not state.extracted_ips[ip] then state.extracted_ips[ip] = {} end
                 table.insert(state.extracted_ips[ip], { txt = log_text, info = p_info })
@@ -1564,8 +1589,6 @@ local function draw_comandos_tab()
         imgui.SameLine()
         imgui.Checkbox("Verif. Duplicados", state.ip_extractor_check_dupes)
         imgui.SameLine()
-        imgui.Checkbox("Salvar Auto (.txt)", state.ip_extractor_auto_save)
-        imgui.SameLine()
         if imgui.Button("Iniciar", imgui.ImVec2(80, 25)) then
             local total = tonumber(state.ip_extractor_total_buf.v)
             if total and total > 0 then
@@ -1777,6 +1800,45 @@ function imgui.OnDrawFrame()
                 imgui.SameLine(); imgui.TextColored(IMAGE_BLUE, string.format("PC: %d", total_pc))
                 imgui.SameLine(); imgui.TextColored(IMAGE_PINK, string.format("Mobile: %d", total_mobile))
                 
+                imgui.SameLine()
+                if not state.ip_extractor_active then
+                    if imgui.Button("Escanear IPs") then
+                        local total = tonumber(state.ip_extractor_total_buf.v)
+                        if total and total > 0 then
+                            lua_thread.create(function()
+                                state.ip_extractor_active = true
+                                state.ip_extractor_current = 0
+                                state.extracted_ips = {}
+                                state.ip_req_queue = {}
+                                sampAddChatMessage("[PI] Iniciando extracao de IPs...", 0x00FF00)
+                                for i = 0, total - 1 do
+                                    if not state.ip_extractor_active then
+                                        sampAddChatMessage("[PI] Extracao de IPs interrompida.", 0xFFD700)
+                                        break
+                                    end
+                                    state.ip_extractor_current = i
+                                    if sampIsPlayerConnected(i) then
+                                        local nick = sampGetPlayerNickname(i)
+                                        table.insert(state.ip_req_queue, {id = i, name = nick})
+                                        sampSendChat("/IP " .. i)
+                                        wait(50)
+                                    end
+                                    if i % 50 == 0 then wait(0) end
+                                end
+                                wait(1000)
+                                if state.ip_extractor_active then
+                                    sampAddChatMessage("[PI] Extracao de IPs concluida!", 0x00FF00)
+                                    if state.ip_extractor_check_dupes.v then saveDuplicatesReport() end
+                                end
+                                state.ip_extractor_active = false
+                            end)
+                        else
+                            sampAddChatMessage("[PI] Quantidade de IPs invalida.", 0xFF0000)
+                        end
+                    end
+                else
+                    imgui.TextColored(IMAGE_YELLOW, string.format("IPs: %d/%s", state.ip_extractor_current, state.ip_extractor_total_buf.v))
+                end
                 imgui.SameLine()
                 if not state.device_scanner_active then
                     if imgui.Button("Escanear Dispositivos") then
