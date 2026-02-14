@@ -15,8 +15,8 @@ local u8 = function(s) return s and encoding.UTF8(s) or "" end
 
 script_name("PainelInfoHelper")
 script_author("Gerado por ChatGPT - Consolidado por Gemini")
-script_version("1.1.57")
-local script_ver_num = 1157
+script_version("1.1.59")
+local script_ver_num = 1159
 script_version_number(script_ver_num)
 
 -- VARIAVEIS DO ADMIN ESP (INTEGRACAO)
@@ -85,7 +85,8 @@ local state = {
     search_text_veiculos = imgui.ImBuffer(256),
     search_text_skins = imgui.ImBuffer(256),
     search_text_armas = imgui.ImBuffer(256),
-    search_text_profissoes = imgui.ImBuffer(256)
+    search_text_profissoes = imgui.ImBuffer(256),
+    manual_scan_id_buf = imgui.ImBuffer(5)
 }
 state.ammo_amount_buf.v = "500"
 state.ip_extractor_total_buf.v = "300"
@@ -587,6 +588,12 @@ local faq_list = {
 }
 
 local changelog_list = {
+    { version = "1.1.59", date = "14/02/2026", changes = {
+        "Melhoria: Renomeado 'CP' para 'Copiar' no menu de contexto da lista de jogadores.",
+    }},
+    { version = "1.1.58", date = "14/02/2026", changes = {
+        "Novo: Opcao de escanear ID especifico manualmente na aba Online.",
+    }},
     { version = "1.1.57", date = "14/02/2026", changes = {
         "Teste: Reativado sistema de localizacao no log de tiros.",
     }},
@@ -1973,6 +1980,49 @@ function imgui.OnDrawFrame()
                             sampAddChatMessage("[PI] Scan de dispositivos concluido!", 0x00FF00)
                         end)
                     end
+                    imgui.SameLine()
+                    imgui.PushItemWidth(40)
+                    imgui.InputText("##ManualScanID", state.manual_scan_id_buf)
+                    imgui.PopItemWidth()
+                    if imgui.IsItemHovered() then imgui.SetTooltip("Digite o ID para escanear individualmente") end
+                    imgui.SameLine()
+                    if imgui.Button("Scan ID") then
+                        local id = tonumber(state.manual_scan_id_buf.v)
+                        if id and sampIsPlayerConnected(id) then
+                            lua_thread.create(function()
+                                state.device_scanner_active = true
+                                local nick = sampGetPlayerNickname(id)
+                                sampAddChatMessage(string.format("[PI] Escaneando ID %d (%s)...", id, nick), 0x00FF00)
+                                
+                                for attempt = 1, 2 do
+                                    if state.player_devices[id] then break end
+                                    state.current_scan_info = {id = id, name = nick}
+                                    state.scan_response_received = false
+                                    state.scan_message_count = 0
+                                    sampSendChat("/ip " .. id)
+                                    state.device_scan_progress = id
+                                    local timeout = 0
+                                    while not state.scan_response_received and timeout < 200 do
+                                        wait(10)
+                                        timeout = timeout + 10
+                                        if state.scan_message_count > 0 and timeout > 50 then break end
+                                    end
+                                    if attempt == 1 and not state.player_devices[id] then wait(50) end
+                                end
+                                if sampIsDialogActive() then sampCloseCurrentDialogWithButton(0) end
+                                
+                                state.current_scan_info = nil
+                                state.device_scanner_active = false
+                                if state.player_devices[id] then
+                                    sampAddChatMessage(string.format("[PI] ID %d detectado: %s", id, state.player_devices[id]), 0x00FF00)
+                                else
+                                    sampAddChatMessage(string.format("[PI] ID %d: Dispositivo nao detectado.", id), 0xFFFF00)
+                                end
+                            end)
+                        else
+                            sampAddChatMessage("[PI] ID invalido ou desconectado.", 0xFF0000)
+                        end
+                    end
                 else
                     imgui.TextColored(IMAGE_YELLOW, string.format("Escaneando... ID %d", state.device_scan_progress))
                 end
@@ -1991,8 +2041,8 @@ function imgui.OnDrawFrame()
                     local line_lbl=string.format("##p_%d",p.id)
                     imgui.Selectable(line_lbl, false, 0, imgui.ImVec2(0, imgui.GetTextLineHeight()))
                     if imgui.BeginPopupContextItem("p_act"..p.id) then 
-                        if imgui.MenuItem("CP Nick") then imgui.SetClipboardText(u8(p.nick)); sampAddChatMessage("Nick CP",0) end; 
-                        if p.profession then if imgui.MenuItem("CP Info") then imgui.SetClipboardText(u8(p.profession)); sampAddChatMessage("Info CP",0) end end; 
+                        if imgui.MenuItem("Copiar Nick") then imgui.SetClipboardText(u8(p.nick)); sampAddChatMessage("Nick Copiado",0) end; 
+                        if p.profession then if imgui.MenuItem("Copiar Info") then imgui.SetClipboardText(u8(p.profession)); sampAddChatMessage("Info Copiada",0) end end; 
                         local ip_data = state.player_ips[p.id]
                         if ip_data and ip_data.nick == p.nick then if imgui.MenuItem("Copiar IP") then imgui.SetClipboardText(ip_data.ip); sampAddChatMessage("[PI] IP copiado: " .. ip_data.ip, -1) end end
                         imgui.Separator(); 
