@@ -16,8 +16,8 @@ local u8 = function(s) return s and encoding.UTF8(s) or "" end
 
 script_name("PainelInfo")
 script_author("Gerado por ChatGPT (GPT-5 Thinking mini) - Consolidado e Corrigido por Gemini, KOP")
-script_version("9.0.49")
-local script_ver_num = 9049
+script_version("9.0.51")
+local script_ver_num = 9051
 script_version_number(script_ver_num)
 
 -- VARIAVEIS DO ADMIN ESP (INTEGRACAO)
@@ -87,7 +87,8 @@ local state = {
     search_text_skins = imgui.ImBuffer(256),
     search_text_armas = imgui.ImBuffer(256),
     search_text_profissoes = imgui.ImBuffer(256),
-    waiting_login_dialog = false
+    waiting_login_dialog = false,
+    manual_scan_id_buf = imgui.ImBuffer(5)
 }
 state.ammo_amount_buf.v = "500"
 state.ip_extractor_total_buf.v = "300"
@@ -1335,6 +1336,7 @@ end
 -- NOVA FUNÇÃO DE CONFIGURAÇÃO (VISUAL)
 -- =========================================================================
 local update_history = {
+    { version = "9.0.51", date = "14/02/2026", changes = { "Novo: Opcao de escanear ID especifico manualmente na aba Online." } },
     { version = "9.0.49", date = "14/02/2026", changes = { "Melhoria: Lista lateral agora ordenada por ID (fixa).", "Novo: Log de tiros com cidade e comando /local." } },
     { version = "9.0.48", date = "13/02/2026", changes = { "Melhoria: Adicionada localizacao (Zona e Coords) no log de tiros." } },
     { version = "9.0.47", date = "12/02/2026", changes = { "Melhoria: Renomeado 'CP' para 'Copiar' no menu de contexto." } },
@@ -1857,6 +1859,49 @@ local function draw_players_tab()
                     state.device_scanner_active = false
                     sampAddChatMessage("[PI] Scan de dispositivos concluido!", 0x00FF00)
                 end)
+            end
+            imgui.SameLine()
+            imgui.PushItemWidth(40)
+            imgui.InputText("##ManualScanID", state.manual_scan_id_buf)
+            imgui.PopItemWidth()
+            if imgui.IsItemHovered() then imgui.SetTooltip("Digite o ID para escanear individualmente") end
+            imgui.SameLine()
+            if imgui.Button("Scan ID") then
+                local id = tonumber(state.manual_scan_id_buf.v)
+                if id and sampIsPlayerConnected(id) then
+                    lua_thread.create(function()
+                        state.device_scanner_active = true
+                        local nick = sampGetPlayerNickname(id)
+                        sampAddChatMessage(string.format("[PI] Escaneando ID %d (%s)...", id, nick), 0x00FF00)
+                        
+                        for attempt = 1, 2 do
+                            if state.player_devices[id] then break end
+                            state.current_scan_info = {id = id, name = nick}
+                            state.scan_response_received = false
+                            state.scan_message_count = 0
+                            sampSendChat("/ip " .. id)
+                            state.device_scan_progress = id
+                            local timeout = 0
+                            while not state.scan_response_received and timeout < 200 do
+                                wait(10)
+                                timeout = timeout + 10
+                                if state.scan_message_count > 0 and timeout > 50 then break end
+                            end
+                            if attempt == 1 and not state.player_devices[id] then wait(50) end
+                        end
+                        if sampIsDialogActive() then sampCloseCurrentDialogWithButton(0) end
+                        
+                        state.current_scan_info = nil
+                        state.device_scanner_active = false
+                        if state.player_devices[id] then
+                            sampAddChatMessage(string.format("[PI] ID %d detectado: %s", id, state.player_devices[id]), 0x00FF00)
+                        else
+                            sampAddChatMessage(string.format("[PI] ID %d: Dispositivo nao detectado.", id), 0xFFFF00)
+                        end
+                    end)
+                else
+                    sampAddChatMessage("[PI] ID invalido ou desconectado.", 0xFF0000)
+                end
             end
         else
             imgui.TextColored(UI_COLORS.YELLOW, string.format("Escaneando... ID %d", state.device_scan_progress))
