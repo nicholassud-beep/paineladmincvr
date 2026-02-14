@@ -16,8 +16,8 @@ local u8 = function(s) return s and encoding.UTF8(s) or "" end
 
 script_name("PainelInfo")
 script_author("Gerado por ChatGPT (GPT-5 Thinking mini) - Consolidado e Corrigido por Gemini, KOP")
-script_version("9.0.36")
-local script_ver_num = 9036
+script_version("9.0.49")
+local script_ver_num = 9049
 script_version_number(script_ver_num)
 
 -- VARIAVEIS DO ADMIN ESP (INTEGRACAO)
@@ -27,6 +27,10 @@ local esp_font = renderCreateFont('Arial', 10, 5) -- Arial 10 com Borda
 local prof_font = nil -- Inicializado apos carregar config
 local esp_spectate_id = -1
 local esp_spectate_vehicle_id = -1
+local last_shot_times = {}
+local last_shot_weapons = {}
+local last_shot_log_times = {}
+local session_date_str = os.date("%Y-%m-%d_%H-%M-%S")
 local weapon_names_esp = {
     [0]="Punhos", [1]="Soco Ingles", [2]="Taco de Golf", [3]="Cassetete", [4]="Faca", [5]="Taco de Basebol",
     [6]="Pa", [7]="Taco de Bilhar", [8]="Katana", [9]="Serra Eletrica", [10]="Dildo Roxo", [11]="Dildo Branco",
@@ -82,7 +86,8 @@ local state = {
     search_text_veiculos = imgui.ImBuffer(256),
     search_text_skins = imgui.ImBuffer(256),
     search_text_armas = imgui.ImBuffer(256),
-    search_text_profissoes = imgui.ImBuffer(256)
+    search_text_profissoes = imgui.ImBuffer(256),
+    waiting_login_dialog = false
 }
 state.ammo_amount_buf.v = "500"
 state.ip_extractor_total_buf.v = "300"
@@ -122,7 +127,7 @@ if cfg.main.check_updates == nil then cfg.main.check_updates = true end
 if not cfg.main.server_ip or cfg.main.server_ip == "" then cfg.main.server_ip = cfg_default.main.server_ip end
 if not cfg.main.theme then cfg.main.theme = "Padrao" end
 if not cfg.main.transparency then cfg.main.transparency = 0.98 end
-if not cfg.main.esp_distance then cfg.main.esp_distance = 6000 end
+if not cfg.main.esp_distance or type(cfg.main.esp_distance) ~= "number" then cfg.main.esp_distance = 6000 end
 if cfg.main.esp_show_prof == nil then cfg.main.esp_show_prof = true end
 if not cfg.main.esp_prof_offset then cfg.main.esp_prof_offset = 0 end
 if not cfg.main.esp_prof_bg_color then cfg.main.esp_prof_bg_color = 0xE0000000 end
@@ -340,6 +345,55 @@ local function set_nametag_status(enable)
     end)
 end
 
+local function getCityFromCoords(x, y)
+    if x > -920 and x < 3000 and y > -3000 and y < 430 then return "Los Santos" end
+    if x > -3000 and x < -850 and y > -2000 and y < 3000 then return "San Fierro" end
+    if x > 850 and x < 3000 and y > 500 and y < 3000 then return "Las Venturas" end
+    return "San Andreas" -- Countryside/Desert
+end
+
+local function logShooting(id, nick, weapon, x, y, z)
+    pcall(function()
+        local dir = getWorkingDirectory() .. "\\logs tiros"
+        if not doesDirectoryExist(dir) then createDirectory(dir) end
+        local p = dir .. "\\PainelInfo_Shooting_" .. session_date_str .. ".txt"
+        local t = os.date("[%H:%M:%S]")
+        local zone_name = getGxtText(getNameOfZone(x, y, z)) or "Desconhecido"
+        local city_name = getCityFromCoords(x, y)
+        local full_loc = string.format("%s, %s", zone_name, city_name)
+        local l = string.format("%s Atirador: %s [%d] | Arma: %s | Local: %s (%.1f, %.1f, %.1f)\n", t, nick, id, weapon, full_loc, x, y, z)
+        local f = io.open(p, "a+")
+        if f then
+            f:write(l)
+            f:close()
+        end
+    end)
+end
+
+local function check_shooting_logic()
+    for _, handle in ipairs(getAllChars()) do
+        if doesCharExist(handle) and handle ~= PLAYER_PED then
+            local res, id = sampGetPlayerIdByCharHandle(handle)
+            if res and sampIsPlayerConnected(id) then
+                if isCharShooting(handle) then
+                    last_shot_times[id] = os.clock()
+                    last_shot_weapons[id] = getCurrentCharWeapon(handle)
+                    
+                    if not last_shot_log_times[id] or (os.clock() - last_shot_log_times[id] > 1.0) then
+                        local wep = getCurrentCharWeapon(handle)
+                        local wep_name = weapon_names_esp[wep] or "Desconhecida"
+                        
+                        local nick = sampGetPlayerNickname(id) or "Unknown"
+                        local px, py, pz = getCharCoordinates(handle)
+                        logShooting(id, nick, wep_name, px, py, pz)
+                        last_shot_log_times[id] = os.clock()
+                    end
+                end
+            end
+        end
+    end
+end
+
 -- FUNCAO LOGICA DO ESP (MOVIDA PARA CIMA)
 local function draw_esp_logic()
     local side_list_data = {}
@@ -425,6 +479,13 @@ local function draw_esp_logic()
                     if headX and headY then
                         local currentY = headY
 
+                        if last_shot_times[id] and (os.clock() - last_shot_times[id] < 1.0) then
+                            local wep_name = weapon_names_esp[last_shot_weapons[id]] or "Arma"
+                            local shoot_text = "[ATIRANDO: " .. string.upper(wep_name) .. "]"
+                            local sW = renderGetFontDrawTextLength(esp_font, shoot_text)
+                            renderFontDrawText(esp_font, shoot_text, headX - (sW / 2), currentY - 12, 0xFFFF0000)
+                        end
+
                         local nick = sampGetPlayerNickname(id) or "Unknown"
 
                         currentY = currentY + (cfg.main.esp_prof_offset or 0)
@@ -447,6 +508,9 @@ local function draw_esp_logic()
                                             local maxW = 0
                                             for _, l in ipairs(lines) do local w = renderGetFontDrawTextLength(prof_font, l); if w > maxW then maxW = w end end
                                             local totalH = #lines * 10
+                                            
+                                            local bg_col = cfg.main.esp_prof_bg_color or 0xE0000000
+                                            renderDrawBox(headX - (maxW / 2) - 2, currentY - 1, maxW + 4, totalH + 2, bg_col)
                                     
                                             local pColor = sampGetPlayerColor(id)
                                             if pColor == 0 then pColor = 0xFFFFFFFF end
@@ -467,6 +531,7 @@ local function draw_esp_logic()
         end
         
         if #side_list_data > 0 then
+            table.sort(side_list_data, function(a, b) return a.id < b.id end) -- Ordena por ID para ficar fixo
             local startY = sh / 2 - (#side_list_data * 14) / 2
             local maxW = 0
             for _, item in ipairs(side_list_data) do
@@ -874,6 +939,17 @@ function sampev.onServerMessage(color, text)
         local txt = text:lower()
         local name_lower = state.current_scan_info.name:lower()
         if txt:find(name_lower, 1, true) or txt:find("ip:") or txt:find("%d+%.%d+%.%d+%.[%d%*]+") or txt:find("android") or txt:find("mobile") or txt:find("celular") or txt:find("launcher") then
+            local ip = text:match("(%d+%.%d+%.%d+%.%d+)")
+            if ip then
+                state.player_ips[state.current_scan_info.id] = {ip = ip, nick = state.current_scan_info.name}
+                local log_text = string.format("Nick: %s (ID: %d) | %s", state.current_scan_info.name, state.current_scan_info.id, text)
+                logFoundIP(log_text)
+                if state.ip_extractor_check_dupes.v then
+                    if not extracted_ips[ip] then extracted_ips[ip] = {} end
+                    table.insert(extracted_ips[ip], { txt = log_text, info = state.current_scan_info })
+                end
+            end
+
             local detected = nil
             if txt:find("android") or txt:find("mobile") or txt:find("celular") then
                 detected = "Mobile"
@@ -922,6 +998,18 @@ function sampev.onShowDialog(id, style, title, button1, button2, text)
 
     if state.device_scanner_active then
         local content = strip_colors((title or "") .. " " .. (text or "")):lower()
+        local raw_text = (title or "") .. " " .. (text or "")
+        local ip = raw_text:match("(%d+%.%d+%.%d+%.%d+)")
+        if ip and state.current_scan_info then
+            state.player_ips[state.current_scan_info.id] = {ip = ip, nick = state.current_scan_info.name}
+            local log_text = string.format("Nick: %s (ID: %d) | Dialog: %s", state.current_scan_info.name, state.current_scan_info.id, raw_text)
+            logFoundIP(log_text)
+            if state.ip_extractor_check_dupes.v then
+                if not extracted_ips[ip] then extracted_ips[ip] = {} end
+                table.insert(extracted_ips[ip], { txt = log_text, info = state.current_scan_info })
+            end
+        end
+
         local detected = nil
         if content:find("android") or content:find("mobile") or content:find("celular") or content:find("ios") then
             detected = "Mobile"
@@ -943,158 +1031,6 @@ end
 function sampev.onShowTextDraw(id, data)
     if state.device_scanner_active then return false end
 end
-
--- FUNCAO LOGICA DO ESP (DESENHO NA TELA)
-local function draw_esp_logic()
-    local side_list_data = {}
-    local sw, sh = getScreenResolution()
-    if (esp_active or prof_tags_active or cfg.main.esp_side_list) and esp_font and prof_font then
-        local myX, myY, myZ = getCharCoordinates(PLAYER_PED)
-        local camX, camY, camZ = getActiveCameraCoordinates()
-        
-        local render_list = {}
-        for _, handle in ipairs(getAllChars()) do
-            if doesCharExist(handle) and handle ~= PLAYER_PED then
-                local res, id = sampGetPlayerIdByCharHandle(handle)
-                if res and sampIsPlayerConnected(id) then
-                    local x, y, z = getCharCoordinates(handle)
-                    local dist = getDistanceBetweenCoords3d(myX, myY, myZ, x, y, z)
-                    if dist < cfg.main.esp_distance then
-                        local onScreen = isPointOnScreen(x, y, z, 0.0)
-                        if onScreen or cfg.main.esp_side_list then
-                            table.insert(render_list, {handle = handle, id = id, dist = dist, x = x, y = y, z = z, onScreen = onScreen})
-                        end
-                    end
-                end
-            end
-        end
-        
-        table.sort(render_list, function(a, b) return a.dist < b.dist end)
-        
-        for _, item in ipairs(render_list) do
-            local handle = item.handle
-            local id = item.id
-            local x, y, z = item.x, item.y, item.z
-            
-            -- Logica da Lista Lateral (Independente de estar na tela)
-            if cfg.main.esp_side_list then
-                local nick = sampGetPlayerNickname(id) or "Unknown"
-                local rank = staff_nick_to_rank_map[string.lower(nick)]
-                if not rank then
-                    local s, n = pcall(encoding.CP1251, nick)
-                    if s and n then rank = staff_nick_to_rank_map[string.lower(n)] end
-                end
-            
-                if not rank then
-                    local prof_name = get_closest_profession_name(sampGetPlayerColor(id))
-                    if prof_name then
-                        local wep_str = ""
-                        local wep = getCurrentCharWeapon(handle)
-                        if wep and weapon_names_esp[wep] then
-                            if wep > 0 or cfg.main.esp_side_list_show_fist then
-                                wep_str = " [" .. weapon_names_esp[wep] .. "]"
-                            end
-                        end
-                        
-                        table.insert(side_list_data, {id=id, nick=nick, prof=prof_name, color=sampGetPlayerColor(id), dist=item.dist, wep=wep_str})
-                    end
-                end
-            end
-
-            local is_visible = true
-            if not esp_active then
-                is_visible = isLineOfSightClear(camX, camY, camZ, x, y, z + 0.7, true, false, false, true, false)
-            end
-
-            if (esp_active or prof_tags_active) and item.onScreen and is_visible then
-                local drawX, drawY, drawZ
-                
-                if isCharInAnyCar(handle) then
-                    local car = getCarCharIsUsing(handle)
-                    if doesVehicleExist(car) then
-                        local cx, cy, cz = getCarCoordinates(car)
-                        drawX, drawY, drawZ = cx, cy, cz + 1.3
-                    else
-                        drawX, drawY, drawZ = x, y, z + 1.3
-                    end
-                else
-                    local res, hx, hy, hz = pcall(getBodyPartCoordinates, handle, 8) -- Bone 8 = Cabeca
-                    if res and hx and hx ~= 0 then
-                        drawX, drawY = hx, hy
-                        drawZ = hz + (esp_active and 0.5 or 0.35)
-                    else
-                        drawX, drawY = x, y
-                        drawZ = z + (esp_active and 2.1 or 1.95)
-                    end
-                end
-                local headX, headY = convert3DCoordsToScreen(drawX, drawY, drawZ)
-                
-                if headX and headY then
-                    local currentY = headY
-
-                                    local nick = sampGetPlayerNickname(id) or "Unknown"
-
-                                    currentY = currentY + (cfg.main.esp_prof_offset or 0)
-
-                                    if (prof_tags_active or (esp_active and cfg.main.esp_show_prof)) and not cfg.main.esp_side_list then
-                                        local rank = staff_nick_to_rank_map[string.lower(nick)]
-                                        if not rank then
-                                            local s, n = pcall(encoding.CP1251, nick)
-                                            if s and n then rank = staff_nick_to_rank_map[string.lower(n)] end
-                                        end
-                                    
-                                        if not rank then
-                                            local prof_name = get_closest_profession_name(sampGetPlayerColor(id))
-                                            
-                                            if prof_name then
-                                                    local lines = {}
-                                                    table.insert(lines, string.format("[%d] %s", id, prof_name))
-                                                    
-                                                    if #lines > 0 then
-                                                        local maxW = 0
-                                                        for _, l in ipairs(lines) do local w = renderGetFontDrawTextLength(prof_font, l); if w > maxW then maxW = w end end
-                                                        local totalH = #lines * 10
-                                                
-                                                local pColor = sampGetPlayerColor(id)
-                                                if pColor == 0 then pColor = 0xFFFFFFFF end
-                                                pColor = bit.bor(pColor, 0xFF000000)
-
-                                                for i, l in ipairs(lines) do
-                                                    local w = renderGetFontDrawTextLength(prof_font, l)
-                                                    renderFontDrawText(prof_font, l, headX - (w / 2), currentY + ((i-1)*10), pColor)
-                                                end
-                                                currentY = currentY + totalH + 2
-                                            end
-                                        end
-                                    end
-                                    end
-                                end
-                end
-            end
-        end
-        
-        if #side_list_data > 0 then
-            local startX = cfg.main.esp_side_list_x or 10
-            local startY = (sh / 2 - (#side_list_data * 14) / 2) + (cfg.main.esp_side_list_y or 0)
-            local maxW = 0
-            for _, item in ipairs(side_list_data) do
-                local text = string.format("[%d] %s - %s%s (%.0fm)", item.id, item.nick, item.prof, item.wep or "", item.dist)
-                local w = renderGetFontDrawTextLength(prof_font, text)
-                if w > maxW then maxW = w end
-            end
-            
-            renderDrawBox(startX, startY - 5, maxW + 10, #side_list_data * 14 + 10, 0x80000000)
-            
-            for i, item in ipairs(side_list_data) do
-                local text = string.format("[%d] %s - %s%s (%.0fm)", item.id, item.nick, item.prof, item.wep or "", item.dist)
-                local pColor = item.color
-                if pColor == 0 then pColor = 0xFFFFFFFF end
-                pColor = bit.bor(pColor, 0xFF000000)
-                
-                renderFontDrawText(prof_font, text, startX + 5, startY + (i-1)*14, pColor)
-            end
-        end
-    end
 
 local function getPlayerId(arg)
     local id = tonumber(arg)
@@ -1121,7 +1057,6 @@ function sampev.onTogglePlayerSpectating(toggle)
     elseif state.stop_spec_requested then
         state.stop_spec_requested = false
         lua_thread.create(function() wait(500) sampSendChat("/godmod") end)
-        -- lua_thread.create(function() wait(500) sampSendChat("/godmod") end)
     end
 end
 
@@ -1400,6 +1335,19 @@ end
 -- NOVA FUNÇÃO DE CONFIGURAÇÃO (VISUAL)
 -- =========================================================================
 local update_history = {
+    { version = "9.0.49", date = "14/02/2026", changes = { "Melhoria: Lista lateral agora ordenada por ID (fixa).", "Novo: Log de tiros com cidade e comando /local." } },
+    { version = "9.0.48", date = "13/02/2026", changes = { "Melhoria: Adicionada localizacao (Zona e Coords) no log de tiros." } },
+    { version = "9.0.47", date = "12/02/2026", changes = { "Melhoria: Renomeado 'CP' para 'Copiar' no menu de contexto." } },
+    { version = "9.0.46", date = "12/02/2026", changes = { "Melhoria: 'Escanear Dispositivos' agora tambem salva o IP do jogador." } },
+    { version = "9.0.45", date = "12/02/2026", changes = { "Log de tiros agora cria um arquivo novo por sessao (ao abrir o jogo)." } },
+    { version = "9.0.44", date = "12/02/2026", changes = { "Removido campo 'Alvo' do log de tiros (estava impreciso)." } },
+    { version = "9.0.43", date = "12/02/2026", changes = { "Correcao: Removida deteccao de alvo instavel no log de tiros." } },
+    { version = "9.0.42", date = "11/02/2026", changes = { "Novo: Sistema de Log de Tiros (Salva em 'logs tiros')." } },
+    { version = "9.0.41", date = "11/02/2026", changes = { "Melhoria: Aviso '[ATIRANDO]' agora mostra o nome da arma." } },
+    { version = "9.0.40", date = "11/02/2026", changes = { "Removido: Opcao 'Linhas de Mira' (Tracers) pois nao funcionou como esperado." } },
+    { version = "9.0.39", date = "11/02/2026", changes = { "Novo: Adicionada opcao 'Linhas de Mira' (Tracers) no ESP." } },
+    { version = "9.0.38", date = "11/02/2026", changes = { "Melhoria: Aviso '[ATIRANDO]' agora permanece por 1s para evitar piscar." } },
+    { version = "9.0.37", date = "11/02/2026", changes = { "Novo: Adicionado aviso visual '[ATIRANDO]' no ESP quando um jogador dispara." } },
     { version = "9.0.36", date = "11/02/2026", changes = { "Correcao: Protecao contra crash ao ajustar distancia (funcao inexistente)." } },
     { version = "9.0.35", date = "11/02/2026", changes = { "Correcao: Removido salvamento excessivo nos sliders (evita crash ao arrastar)." } },
     { version = "9.0.34", date = "11/02/2026", changes = { "Otimizacao: Wallhack R1 agora usa funcoes nativas (independente de outros scripts)." } },
@@ -1947,14 +1895,14 @@ local function draw_players_tab()
             imgui.SetItemAllowOverlap()
             
             if imgui.BeginPopupContextItem("p_act" .. p.id) then
-                if imgui.MenuItem("CP Nick") then
+                if imgui.MenuItem("Copiar Nick") then
                     imgui.SetClipboardText(u8(p.nick))
-                    sampAddChatMessage("Nick CP", 0)
+                    sampAddChatMessage("Nick Copiado", 0)
                 end
                 if p.profession then
-                    if imgui.MenuItem("CP Info") then
+                    if imgui.MenuItem("Copiar Info") then
                         imgui.SetClipboardText(u8(p.profession))
-                        sampAddChatMessage("Info CP", 0)
+                        sampAddChatMessage("Info Copiada", 0)
                     end
                 end
                 local ip_data = state.player_ips[p.id]
@@ -2133,7 +2081,7 @@ local function draw_vehicles_content(search_val, compact)
             for _, v in ipairs(vehicles) do
                 if allowed[v.name:lower()] then table.insert(filt_v, v) end
             end
-            table.sort(filt_v, function(a, b) return a.id < b.id end)
+            pcall(table.sort, filt_v, function(a, b) return (tonumber(a.id) or 0) < (tonumber(b.id) or 0) end)
         end
     else
             if not compact then imgui.TextDisabled("Lista de veiculos. Duplo clique para criar (/cv).") end
@@ -2788,6 +2736,12 @@ sampRegisterChatCommand("veiculos", function() state.window_veiculos.v = not sta
 sampRegisterChatCommand("skins", function() state.window_skins.v = not state.window_skins.v; check_process() end)
 sampRegisterChatCommand("armas", function() state.window_armas.v = not state.window_armas.v; check_process() end)
 sampRegisterChatCommand("profissoes", function() state.window_profissoes.v = not state.window_profissoes.v; check_process() end)
+sampRegisterChatCommand("local", function()
+    local x, y, z = getCharCoordinates(PLAYER_PED)
+    local zone_name = getGxtText(getNameOfZone(x, y, z)) or "Desconhecido"
+    local city_name = getCityFromCoords(x, y)
+    sampAddChatMessage(string.format("[PI] Local atual: %s, %s (%.1f, %.1f, %.1f)", zone_name, city_name, x, y, z), -1)
+end)
 sampRegisterChatCommand("limparchat", function()
     for i = 1, 100 do sampAddChatMessage("", -1) end
     sampAddChatMessage("[PainelInfo] Chat limpo localmente.", 0x00FF00)
@@ -2816,13 +2770,8 @@ function main()
     end
 
     while true do wait(0)
-        local status, err = pcall(draw_esp_logic)
-        if not status then
-            print("[PainelInfo] Erro no ESP: " .. tostring(err))
-            esp_active = false
-            set_nametag_status(false)
-            sampAddChatMessage("[PI] Erro critico no ESP: " .. tostring(err), 0xFF0000)
-        end
+        check_shooting_logic()
+        draw_esp_logic()
 
         if waiting_for_bind then
             for k = 1, 255 do
