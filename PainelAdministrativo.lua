@@ -152,7 +152,7 @@ local staff_by_rank = {
     Direcao = { ".42.", "Boris", "LucasFirmino" },
     Coordenador = { "Dog.", "Cleyton.", "MatheusUnity", "DiegoN_", "DaviL" },
     Administrador = { "Mirian", "TomRedl.", "KrugeR.", "Ryu." },
-    Moderador = { ".Lacta", "Belo", "Rafael82", "MateusVictor", "chukc", "Dr.Manhattan_.", "Lucasfuj", "Davi.", "LeonardoX", "Caua.." },
+    Moderador = { ".Lacta", "Belo", "Rafael182", "MateusVictor", "chukc", "Dr.Manhattan_.", "Lucasfuj", "Davi.", "LeonardoX", "Caua.." },
     Ajudante = { "Koyama.", "ZeGotinha_.", "Uberzitoh", "NotoriousBIG", "Liima.", "Scheppard", ".RagnaroK", "Faggio", "YuriUnity." },
     ["Estagiario"] = { "D0uglitas", "Duarte.Tm", "MitoMitoso", ".PATCHENCO", ".BS", "Freitas_" }
 }
@@ -2355,3 +2355,4 @@ function onScriptTerminate(script, quit)
         inicfg.save(cfg, "PainelInfoHelper_Config.ini")
     end
 end
+
