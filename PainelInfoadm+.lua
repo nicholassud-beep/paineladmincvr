@@ -50,6 +50,7 @@ local state = {
     active_prof_sub_tab = 1,
     active_locais_sub_tab = 1, -- 1=Interiores, 2=Eventos
     theme_combo_idx = imgui.ImInt(0),
+    online_filter_idx = imgui.ImInt(0),
     search_text = imgui.ImBuffer(256),
     current_sort_column = "ID",
     sort_direction = 1,
@@ -143,6 +144,7 @@ prof_font = renderCreateFont('Arial', cfg.main.esp_side_list_font_size, 5)
 
 -- LISTA DE TEMAS ATUALIZADA
 local theme_list = {"Padrao", "Claro", "Roxo", "Vermelho", "Verde", "Laranja", "Amarelo", "Rosa", "Ciano", "Escuro"}
+local online_filters = {"Todos", "PC", "Mobile", "Mafia", "Honestas", "Multicontas"}
 local key_names = {}
 for k, v in pairs(vkeys) do key_names[v] = k end
 local waiting_for_bind = false
@@ -1742,6 +1744,12 @@ local function draw_players_tab()
     local hdr = is_nov and "Novatos:" or (is_on and "Online:" or "")
     
     imgui.Text(hdr)
+    if is_on then
+        imgui.SameLine()
+        imgui.PushItemWidth(150)
+        imgui.Combo("##OnlineFilter", state.online_filter_idx, online_filters)
+        imgui.PopItemWidth()
+    end
     imgui.Separator()
     
     local data = {}
@@ -1757,6 +1765,16 @@ local function draw_players_tab()
     end
     
     local search_norm = remove_accents(state.search_text.v)
+
+    local ip_counts = {}
+    if online_filters[state.online_filter_idx.v + 1] == "Multicontas" then
+        for id, data in pairs(state.player_ips) do
+            if sampIsPlayerConnected(id) then
+                ip_counts[data.ip] = (ip_counts[data.ip] or 0) + 1
+            end
+        end
+    end
+
     for i = 0, maxid do
         if sampIsPlayerConnected(i) then
             local nick = sampGetPlayerNickname(i)
@@ -1793,17 +1811,42 @@ local function draw_players_tab()
                 }
                 
                 local paused = sampIsPlayerPaused(i) or false
-                local passes = (is_on) or (is_nov and pdata.Level < 12 and not paused)
+                
+                local filter_sel = online_filters[state.online_filter_idx.v + 1]
+                local filter_pass = true
+                local dev = state.player_devices[i]
+                local p_type = prof_type_map[(pdata.profession or ""):lower()]
+
+                if filter_sel == "PC" then
+                    if dev ~= "PC" then filter_pass = false end
+                elseif filter_sel == "Mobile" then
+                    if dev ~= "Mobile" then filter_pass = false end
+                elseif filter_sel == "Mafia" then
+                    if p_type ~= "Mafia" then filter_pass = false end
+                elseif filter_sel == "Honestas" then
+                    if p_type ~= "Legal" then filter_pass = false end
+                elseif filter_sel == "Multicontas" then
+                    local p_ip_data = state.player_ips[i]
+                    if not p_ip_data or not p_ip_data.ip or (ip_counts[p_ip_data.ip] or 0) < 2 then
+                        filter_pass = false
+                    end
+                end
+
+                local passes = ((is_on) or (is_nov and pdata.Level < 12 and not paused)) and filter_pass
                 
                 if passes then
                     local prof_norm = remove_accents(pdata.profession or "")
                     local nick_norm = remove_accents(nick)
                     local id_s = tostring(i)
                     
+                    local ip_data = state.player_ips[i]
+                    local ip_str = (ip_data and ip_data.nick == nick) and ip_data.ip or ""
+
                     local m_txt = nick_norm:find(search_norm, 1, true) or prof_norm:find(search_norm, 1, true)
                     local m_id = id_s:find(search_norm, 1, true)
+                    local m_ip = ip_str:find(search_norm, 1, true)
                     
-                    if m_txt or m_id then
+                    if m_txt or m_id or m_ip then
                         table.insert(data, pdata)
                         if is_on then
                             if pdata.is_staff then

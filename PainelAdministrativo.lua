@@ -1930,9 +1930,15 @@ function imgui.OnDrawFrame()
 
                         if passes then
                             local nick_u8=u8(nick):lower(); local prof_u8=u8(pdata.profession or ""):lower(); local id_s=tostring(i); 
+                            
+                            local ip_data = state.player_ips[i]
+                            local ip_str = (ip_data and ip_data.nick == nick) and ip_data.ip or ""
+
                             local m_txt=nick_u8:find(search_u8,1,true) or prof_u8:find(search_u8,1,true); 
                             local m_id=id_s:find(search_cp,1,true); 
-                            if m_txt or m_id then 
+                            local m_ip=ip_str:find(search_cp,1,true);
+                            
+                            if m_txt or m_id or m_ip then 
                                 if pdata.is_staff and not is_nov then table.insert(staff,pdata) else table.insert(players,pdata) end 
                             end 
                         end
