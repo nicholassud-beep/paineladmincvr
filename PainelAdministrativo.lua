@@ -150,10 +150,10 @@ state.auto_cheat_check.v = cfg.main.auto_cheat
 local staff_by_rank = {
     Desenvolvedor = { "LKWilliam" },
     Direcao = { ".42.", "Boris", "LucasFirmino" },
-    Coordenador = { "Dog.", "Cleyton.", "MatheusUnity", "DiegoN_", "DaviL" },
-    Administrador = { "Mirian", "TomRedl.", "KrugeR.", "Ryu." },
+    Coordenador = { "Dog.", "Cleyton.", "MatheusUnity", "DiegoN_", "DaviL", "TomRedl." },
+    Administrador = { "Mirian", "KrugeR.", "Ryu." },
     Moderador = { ".Lacta", "Belo", "Rafael182", "MateusVictor", "chukc", "Dr.Manhattan_.", "Lucasfuj", "Davi.", "LeonardoX", "Caua.." },
-    Ajudante = { "Koyama.", "ZeGotinha_.", "Uberzitoh", "NotoriousBIG", "Liima.", "Scheppard", ".RagnaroK", "Faggio", "YuriUnity." },
+    Ajudante = { "Koyama.", "ZeGotinha_.", "NotoriousBIG", "Liima.", "Scheppard", ".RagnaroK", "Faggio", },
     ["Estagiario"] = { "D0uglitas", "Duarte.Tm", "MitoMitoso", ".PATCHENCO", ".BS", "Freitas_" }
 }
 local staff_nick_to_rank_map = {}
@@ -2375,3 +2375,4 @@ function onScriptTerminate(script, quit)
         inicfg.save(cfg, "PainelInfoHelper_Config.ini")
     end
 end
+
